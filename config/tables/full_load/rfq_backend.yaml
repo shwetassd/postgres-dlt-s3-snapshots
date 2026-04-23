@@ -1,0 +1,4 @@
+tables:
+  - schema: public
+    table: supplier_responses_quota_tracker
+    enabled: false

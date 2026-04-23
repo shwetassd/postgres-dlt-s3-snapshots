@@ -1,0 +1,11 @@
+tables:
+  - schema: public
+    table: supplier_rfq_recommendation
+    enabled: true
+    columns:
+      - event_id
+      - event_time
+      - event_type
+      - supplier_id
+      - rfq_id
+      - conversation_id

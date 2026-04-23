@@ -1,0 +1,60 @@
+tables:
+  - schema: public
+    table: online_products_counts_v2
+    enabled: false
+    columns:
+      - package_name
+      - platforms
+      - company_uuid
+      - standard_limit
+      - boosted_limit
+      - standard
+      - boosted
+    
+
+  - schema: public
+    table: last_12_months
+    enabled: false
+    columns:
+      - platform
+      - uuid
+      - page
+      - serp
+      - request
+      - c2s
+      - c2p
+    
+
+  - schema: public
+    table: last_30_days
+    enabled: false
+    columns:
+      - platform
+      - uuid
+      - page
+      - serp
+      - request
+      - c2s
+      - c2p
+
+  - schema: public
+    table: request_received_monthly_agg
+    enabled: false
+    columns:
+      - date
+      - company_uuid
+      - platform
+      - rfi_received_nb
+      - rfq_received_nb
+
+  - schema: public
+    table: company
+    enabled: false
+
+  - schema: public
+    table: membership
+    enabled: false
+
+  - schema: public
+    table: product
+    enabled: false

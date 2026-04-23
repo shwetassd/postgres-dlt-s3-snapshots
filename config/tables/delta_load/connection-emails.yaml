@@ -1,0 +1,26 @@
+tables:
+  - schema: public
+    table: send_email_request
+    columns:
+      - id
+      - caller_service_message_id
+      - context_platform
+      - context_service_origin
+      - from_email
+      - to_email
+      - email_provider
+      - email_provider_template_id
+      - email_provider_custom_properties
+      - email_provider_contact_properties
+      - metadata
+      - provider_message_id
+      - status
+      - created_at
+      - sent_at
+      - reply_to_email
+      - caller_service_transaction_id
+    primary_key: id
+    initial_value: "1970-01-01"
+    cursor_column: created_at
+    updated_column: created_at
+    enabled: false

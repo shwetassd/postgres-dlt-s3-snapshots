@@ -1,0 +1,61 @@
+tables:
+  - schema: public
+    table: verticals
+    enabled: false
+    columns:
+      - id
+      - name
+      - slug
+      - created_at
+      - updated_at
+      - company_category_ids
+
+  - schema: public
+    table: concepts
+    enabled: false
+    columns:
+      - id
+      - name
+      - created_at
+      - updated_at
+      - label
+      - terms_count
+      - user_facing
+      - vertical_id
+      - is_phrase
+
+  - schema: public
+    table: terms
+    enabled: false
+    columns:
+      - id
+      - concept_id
+      - kind
+      - name
+      - created_at
+      - updated_at
+      - numerus
+      - language
+      - normalized_name
+
+  - schema: public
+    table: properties
+    enabled: false
+    columns:
+      - id
+      - name
+      - value
+      - concept_id
+      - tag_id
+      - created_at
+      - updated_at
+
+  - schema: public
+    table: concept_relationships
+    enabled: false
+    columns:
+      - id
+      - child_concept_id
+      - parent_concept_id
+      - created_at
+      - updated_at

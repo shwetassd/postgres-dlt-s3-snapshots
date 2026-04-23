@@ -1,0 +1,46 @@
+tables:
+  - schema: public
+    table: notifications
+    enabled: false
+    columns:
+      - id
+      - platform
+      - user_profile_id
+      - topic
+      - created_at
+      - updated_at
+      - category
+      - label
+
+  - schema: public
+    table: emails
+    enabled: false
+    columns:
+      - id
+      - notification_id
+      - recipient
+      - template_id
+      - custom_properties
+      - status_id
+      - send_result
+      - created_at
+      - updated_at
+      - contact_properties
+      - instant_send
+      - status_details
+      - status
+      - request_status
+      - reply_to
+      - event_id
+
+  - schema: public
+    table: configurations
+    enabled: false
+
+  - schema: public
+    table: mobile_push_notifications
+    enabled: false
+
+  - schema: public
+    table: web_notifications
+    enabled: false

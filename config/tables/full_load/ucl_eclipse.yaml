@@ -1,0 +1,252 @@
+tables:
+  - schema: public
+    table: bookable_keyword_v2
+    enabled: true
+    columns:
+      - id
+      - keyword
+      - wlw_category_id
+      - inserted_at
+      - updated_at
+
+  - schema: public
+    table: bookable_keyword_sales_information
+    enabled: true
+    columns:
+      - id
+      - target_market
+      - price_group
+      - sponsored_brand
+      - platform
+      - inserted_at
+      - updated_at
+      - bookable_keyword_id
+
+  - schema: public
+    table: bookable_keyword_synonym
+    enabled: true
+    columns:
+      - id
+      - language
+      - synonym
+      - main
+      - inserted_at
+      - updated_at
+      - bookable_keyword_id
+
+  - schema: public
+    table: top_ranking_v1
+    enabled: true
+    select_sql: |
+      id,
+      active,
+      ad_category_id,
+      company_name,
+      contract_is_cancelled,
+      contract_is_standing_order,
+      end_date,
+      keyword_sets::text as keyword_sets,
+      keyword,
+      array_to_string(markets, ',') as markets,
+      mft_part_number,
+      platform,
+      "position",
+      reserved_until,
+      runtime_category,
+      start_date,
+      state,
+      supplier_facts_uuid,
+      target_market,
+      validity_range::text as validity_range,
+      wlw_category_id,
+      inserted_at,
+      updated_at,
+      organization_uuid
+    output_columns:
+      - id
+      - active
+      - ad_category_id
+      - company_name
+      - contract_is_cancelled
+      - contract_is_standing_order
+      - end_date
+      - keyword_sets
+      - keyword
+      - markets
+      - mft_part_number
+      - platform
+      - position
+      - reserved_until
+      - runtime_category
+      - start_date
+      - state
+      - supplier_facts_uuid
+      - target_market
+      - validity_range
+      - wlw_category_id
+      - inserted_at
+      - updated_at
+      - organization_uuid
+
+  - schema: public
+    table: sponsored_brand_v1
+    enabled: true
+    select_sql: |
+      id,
+      active,
+      ad_category_id,
+      company_name,
+      contract_is_cancelled,
+      contract_is_standing_order,
+      end_date,
+      keyword_sets::text as keyword_sets,
+      keyword,
+      array_to_string(markets, ',') as markets,
+      mft_part_number,
+      platform,
+      reserved_until,
+      runtime_category,
+      start_date,
+      state,
+      supplier_facts_uuid,
+      target_market,
+      validity_range::text as validity_range,
+      wlw_category_id,
+      inserted_at,
+      updated_at,
+      organization_uuid
+    output_columns:
+      - id
+      - active
+      - ad_category_id
+      - company_name
+      - contract_is_cancelled
+      - contract_is_standing_order
+      - end_date
+      - keyword_sets
+      - keyword
+      - markets
+      - mft_part_number
+      - platform
+      - reserved_until
+      - runtime_category
+      - start_date
+      - state
+      - supplier_facts_uuid
+      - target_market
+      - validity_range
+      - wlw_category_id
+      - inserted_at
+      - updated_at
+      - organization_uuid
+    
+  - schema: public
+    table: sales_order
+    enabled: true
+    columns:
+      - id
+      - sales_order_id
+      - business_partner_id
+      - sddocument_reason
+      - y_contract_start_date
+      - y_contract_end_date
+      - y_cancel_request_date
+      - y_validity_period_category
+      - sales_order_item_text
+      - sales_order_item_material
+      - sales_order_item_production_plant
+      - y_cancel_reason
+      - sales_organization
+      - sales_order_item_requested_quantity
+      - sales_order_time_status
+      - sales_order_item_id
+      - start_date
+      - end_date
+      - sales_order_item_rejection_reason
+      - sales_order_item_yy_county_group_sdi
+      - sales_order_item_yylink
+
+  - schema: public
+    table: membership
+    enabled: true
+    select_sql: |
+      id,
+      title,
+      start_date,
+      expiry_date,
+      active,
+      onboarding_boost,
+      standard_product_limit,
+      boosted_product_limit,
+      platform,
+      home_market,
+      company_name,
+      contract_kind,
+      contract_amount,
+      contract_category_id,
+      contract_status,
+      contract_time_status,
+      contract_is_standing_order,
+      contract_is_cancelled,
+      contract_mft_part_number,
+      supplier_facts_uuid,
+      organization_uuid,
+      sugar_crm_company_uuid,
+      business_partner_id,
+      sap_company_id,
+      contract_has_dunning,
+      array_to_string(target_markets, ',') as target_markets,
+      country_group_type,
+      array_to_string(country_groups, ',') as country_groups,
+      sales_organization,
+      end_date,
+      sales_order_id,
+      sales_order_item_id
+    output_columns:
+      - id
+      - title
+      - start_date
+      - expiry_date
+      - active
+      - onboarding_boost
+      - standard_product_limit
+      - boosted_product_limit
+      - platform
+      - home_market
+      - company_name
+      - contract_kind
+      - contract_amount
+      - contract_category_id
+      - contract_status
+      - contract_time_status
+      - contract_is_standing_order
+      - contract_is_cancelled
+      - contract_mft_part_number
+      - supplier_facts_uuid
+      - organization_uuid
+      - sugar_crm_company_uuid
+      - business_partner_id
+      - sap_company_id
+      - contract_has_dunning
+      - target_markets
+      - country_group_type
+      - country_groups
+      - sales_organization
+      - end_date
+      - sales_order_id
+      - sales_order_item_id
+
+  - schema: public
+    table: organization
+    enabled: true
+    columns:
+      - organization_uuid
+      - organization_name
+      - supplier_facts_uuid
+      - sugar_crm_company_uuid
+      - sap_customer_number
+      - sap_company_id
+      - hubspot_id
+      - home_market
+      - ep_supplier_facts_uuid
+      - wlw_supplier_facts_uuid

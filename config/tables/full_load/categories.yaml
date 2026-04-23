@@ -1,0 +1,20 @@
+tables:
+  - schema: public
+    table: company_categories
+    enabled: false
+    select_sql: |
+      id,
+      COALESCE(name -> 'de', '') AS name_de,
+      COALESCE(name -> 'en', '') AS name_en,
+      COALESCE(name -> 'fr', '') AS name_fr,
+      COALESCE(description -> 'de', '') AS desc_de,
+      COALESCE(description -> 'en', '') AS desc_en,
+      COALESCE(description -> 'fr', '') AS desc_fr,
+      COALESCE(slug -> 'de', '') AS slug_de,
+      COALESCE(slug -> 'en', '') AS slug_en,
+      COALESCE(slug -> 'fr', '') AS slug_fr,
+      kind,
+      unnest(parent_ids) AS parent_id,
+      created_at,
+      updated_at,
+      deprecated

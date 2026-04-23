@@ -1,0 +1,39 @@
+tables:
+  - schema: public
+    table: "CompanyRatings"
+    enabled: false
+    select_sql: |
+      id,
+      "createdAt" as created_at,
+      "updatedAt" as updated_at,
+      "overrideTime" as override_time,
+      "restrictedIn" as restrictedin,
+      "keywordRating" as keyword_rating,
+      "llmRating" as llm_rating
+
+  - schema: public
+    table: "OfferRatings"
+    enabled: false
+    select_sql: |
+      id,
+      "createdAt" as created_at,
+      "updatedAt" as updated_at,
+      etag,
+      "overrideTime" as override_time,
+      "categoryRating" as category_rating,
+      "restrictedIn" as restrictedin,
+      "keywordRating" as keyword_rating,
+      "llmRating" as llm_rating
+
+  - schema: public
+    table: "_prisma_migrations"
+    enabled: false
+    columns:
+      - id
+      - checksum
+      - finished_at
+      - migration_name
+      - logs
+      - rolled_back_at
+      - started_at
+      - applied_steps_count

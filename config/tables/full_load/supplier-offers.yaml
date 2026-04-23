@@ -1,0 +1,26 @@
+tables:
+  - schema: public
+    table: videos
+    enabled: true
+    columns:
+      - id
+      - caption
+      - kind
+      - video_id
+      - offer_data_videos
+      - create_time
+      - update_time
+      - position
+      - translations_caption
+
+  - schema: public
+    table: attachments
+    enabled: true
+    columns:
+      - id
+      - kind
+      - attachment_file
+      - offer_data_attachments
+      - create_time
+      - update_time
+      - position

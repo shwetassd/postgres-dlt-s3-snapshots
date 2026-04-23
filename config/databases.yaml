@@ -1,0 +1,63 @@
+databases:
+  - name: supplier_statistics
+    env_database_key: POSTGRES_DB_SUPPLIER_STATISTICS
+
+  - name: rfq_backend
+    env_database_key: POSTGRES_DB_RFQ_BACKEND
+
+  - name: explore
+    env_database_key: POSTGRES_DB_EXPLORE
+
+  - name: mobile
+    env_database_key: POSTGRES_DB_MOBILE
+
+  - name: notifications_backend
+    env_database_key: POSTGRES_DB_NOTIFICATIONS_BACKEND
+
+  - name: ontology
+    env_database_key: POSTGRES_DB_ONTOLOGY
+
+  - name: rfq_service
+    env_database_key: POSTGRES_DB_RFQ_SERVICE
+
+  - name: search_rec_backend
+    env_database_key: POSTGRES_DB_SEARCH_REC_BACKEND
+
+  - name: statistics
+    env_database_key: POSTGRES_DB_STATISTICS
+
+  - name: supplier-offers
+    env_database_key: POSTGRES_DB_SUPPLIER_OFFERS
+
+  - name: supplier-onboarding
+    env_database_key: POSTGRES_DB_SUPPLIER_ONBOARDING
+
+  - name: unified_search_backend
+    env_database_key: POSTGRES_DB_UNIFIED_SEARCH_BACKEND
+
+  - name: user-backend
+    env_database_key: POSTGRES_DB_USER_BACKEND
+
+  - name: user-kratos
+    env_database_key: POSTGRES_DB_USER_KRATOS
+
+  - name: categories
+    env_database_key: POSTGRES_DB_CATEGORIES
+
+  - name: conversations
+    env_database_key: POSTGRES_DB_CONVERSATIONS
+
+  - name: connection-emails
+    env_database_key: POSTGRES_DB_CONNECTION_EMAILS
+
+  - name: content-approval-rating
+    env_database_key: POSTGRES_DB_CONTENT_APPROVAL_RATING
+
+  - name: business-insights
+    env_database_key: POSTGRES_DB_BUSINESS_INSIGHTS
+
+  - name: central-notification-service
+    env_database_key: POSTGRES_DB_CENTRAL_NOTIFICATION_SERVICE
+
+  - name: ucl_eclipse
+    env_database_key: POSTGRES_DB_UCL_ECLIPSE

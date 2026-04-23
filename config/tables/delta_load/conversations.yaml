@@ -1,0 +1,77 @@
+tables:
+  - schema: public
+    table: conversation
+    columns:
+      - conversation_id
+      - organization_id
+      - request_type
+      - created_at
+      - modified_at
+      - sender_id
+      - product_id
+      - is_answered
+      - is_frozen
+      - is_archived
+      - hidden_from_sender
+      - platform_code
+    primary_key: conversation_id
+    initial_value: "1970-01-01"
+    cursor_column: created_at
+    updated_column: modified_at
+    enabled: false
+
+  - schema: public
+    table: organization
+    columns:
+      - organization_id
+      - organization_name
+      - description
+      - address
+      - country
+      - logo_url
+      - created_at
+      - modified_at
+    primary_key: organization_id
+    initial_value: "1970-01-01"
+    cursor_column: created_at
+    updated_column: modified_at
+    enabled: false
+
+  - schema: public
+    table: platform_user
+    columns:
+      - user_id
+      - external_id
+      - email
+      - country
+      - full_name
+      - source_platform
+      - address
+      - is_anonymized
+      - created_at
+      - modified_at
+      - platform
+      - user_profile_id
+    primary_key: user_id
+    initial_value: "1970-01-01"
+    cursor_column: created_at
+    updated_column: modified_at
+    enabled: false
+
+  - schema: public
+    table: message
+    columns:
+      - id
+      - conversation_id
+      - message_type
+      - contents
+      - created_by
+      - created_at
+      - updated_at
+      - status
+      - sent_from
+    primary_key: id
+    initial_value: "1970-01-01"
+    cursor_column: created_at
+    updated_column: updated_at
+    enabled: false

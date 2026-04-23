@@ -1,0 +1,43 @@
+tables:
+  - schema: public
+    table: Profile
+    columns:
+      - createTime
+      - updateTime
+      - createPlatform
+      - legacyWlwId
+      - legacyEpId
+      - id
+      - countryCode
+      - email
+      - givenName
+      - isAdmin
+      - preferredLanguage
+      - salutation
+      - surname
+      - mobile
+      - phone
+      - agreements
+      - identityId
+      - roles
+      - organisation
+      - alibabaId
+    primary_key: id
+    initial_value: "1970-01-01"
+    cursor_column: createTime
+    updated_column: updateTime
+    enabled: false
+
+  - schema: public
+    table: SupplierProfile
+    columns:
+      - id
+      - createTime
+      - updateTime
+      - profileId
+      - supplierFactId
+    primary_key: id
+    initial_value: "1970-01-01"
+    cursor_column: createTime
+    updated_column: updateTime
+    enabled: false

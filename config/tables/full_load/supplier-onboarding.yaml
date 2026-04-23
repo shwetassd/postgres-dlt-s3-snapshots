@@ -1,0 +1,116 @@
+tables:
+  - schema: public
+    table: import_task
+    enabled: true
+    columns:
+      - id
+      - task_id
+      - supplier_id
+      - status
+      - type
+      - created_by
+      - created_at
+      - updated_at
+      - import_count
+      - metadata
+
+  - schema: public
+    table: report_imported_drafts
+    enabled: true
+    columns:
+      - import_task_id
+      - type
+      - imported_by
+      - imported_items
+      - created_at
+      - language
+
+  - schema: public
+    table: report_published_drafts
+    enabled: true
+    columns:
+      - import_task_id
+      - draft_id
+      - offer_id
+      - published_at
+      - created_at
+
+  - schema: public
+    table: report_product_filling_score
+    enabled: true
+    select_sql: |
+      id,
+      supplier_offer_id,
+      supplier_facts_id,
+      category_score,
+      description_score,
+      image_score,
+      keyword_score,
+      moq_score,
+      name_score,
+      price_score,
+      property_score,
+      total_score,
+      adjusted_total_score,
+      master_language,
+      updated_at,
+      updated_by,
+      offer_status,
+      record_created_at,
+      record_updated_at,
+      "snapshot"::text as snapshot,
+      platform
+    output_columns:
+      - id
+      - supplier_offer_id
+      - supplier_facts_id
+      - category_score
+      - description_score
+      - image_score
+      - keyword_score
+      - moq_score
+      - name_score
+      - price_score
+      - property_score
+      - total_score
+      - adjusted_total_score
+      - master_language
+      - updated_at
+      - updated_by
+      - offer_status
+      - record_created_at
+      - record_updated_at
+      - snapshot
+      - platform
+
+  - schema: public
+    table: offers
+    enabled: true
+    select_sql: |
+      offer_id,
+      supplier_id,
+      product_details::text as product_details,
+      create_by,
+      published,
+      deleted,
+      created_at,
+      updated_at,
+      status,
+      origin_product_id,
+      platforms::text as platforms
+    output_columns:
+      - offer_id
+      - supplier_id
+      - product_details
+      - create_by
+      - published
+      - deleted
+      - created_at
+      - updated_at
+      - status
+      - origin_product_id
+      - platforms
+
+  - schema: public
+    table: report_duplicate_offers
+    enabled: true

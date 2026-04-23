@@ -1,0 +1,13 @@
+tables:
+  - schema: public
+    table: _prisma_migrations
+    enabled: true
+    columns:
+      - id
+      - checksum
+      - finished_at
+      - migration_name
+      - logs
+      - rolled_back_at
+      - started_at
+      - applied_steps_count

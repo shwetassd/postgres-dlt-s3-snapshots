@@ -1,0 +1,108 @@
+tables:
+  - schema: public
+    table: matching_conversation
+    enabled: false
+    columns:
+      - id
+      - matching_id
+      - rfq_id
+      - supplier_uuid
+      - sender_user_id
+      - conversation_id
+      - created_at
+      - first_reply_from_purchaser_at
+      - first_reply_message_from_supplier
+      - first_reply_from_supplier_at
+      - first_reply_message_from_purchaser
+
+  - schema: public
+    table: matching_logs
+    enabled: false
+    columns:
+      - id
+      - matching_id
+      - action_code
+      - status
+      - created_at
+
+  - schema: public
+    table: legacy_rfq_to_rfq_id_mapping
+    enabled: false
+    columns:
+      - id
+      - legacy_rfq_id
+      - rfq_id
+      - platform_code
+      - created_at
+
+  - schema: public
+    table: matching_core
+    enabled: false
+    select_sql: |
+      matching_id,
+      rfq_id,
+      supplier_uuid,
+      REPLACE(REPLACE(supplier_name, E'\n', ' '), E'\r', ' ') AS supplier_name,
+      supplier_key,
+      supplier_platform_id,
+      is_customer,
+      created_at,
+      updated_at,
+      published_at,
+      status,
+      origin
+
+  - schema: public
+    table: rfq_processing
+    enabled: false
+
+  - schema: public
+    table: supplier_skip_list
+    enabled: false
+    columns:
+      - id
+      - supplier_uuid
+      - created_at
+
+  - schema: public
+    table: recommended_supplier
+    enabled: false
+    columns:
+      - id
+      - rfq_id
+      - supplier_id
+      - name
+      - website
+      - profile_url
+      - country
+      - distribution_area
+      - description
+      - description_de
+      - description_en
+      - supplier_types
+      - products
+      - keywords
+      - product_categories
+      - created_at
+      - status
+      - is_customer
+      - customer_in_need
+      - match_type
+      - raw_recommendation_json
+
+  - schema: public
+    table: rfq_user
+    enabled: false
+    select_sql: |
+      rfq_user_id,
+      user_profile_id,
+      replace(email, 'inactive_user_', '') AS email,
+      full_name,
+      language_code,
+      country_code,
+      created_at,
+      updated_at
+
+  - schema: public
+    table: rfq_content_quality
+    enabled: false

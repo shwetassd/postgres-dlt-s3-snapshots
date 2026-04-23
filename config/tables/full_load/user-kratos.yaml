@@ -1,0 +1,7 @@
+tables:
+  - schema: public
+    table: identity_credential_types
+    enabled: true
+    columns:
+      - id
+      - name

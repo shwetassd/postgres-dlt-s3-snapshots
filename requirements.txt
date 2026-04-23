@@ -1,0 +1,9 @@
+dlt[filesystem,parquet]
+s3fs
+sqlalchemy
+psycopg2-binary
+python-dotenv
+pyyaml
+boto3
+numpy
+pandas

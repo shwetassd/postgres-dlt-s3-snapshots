@@ -1,0 +1,68 @@
+tables:
+  - schema: public
+    table: rfq_core
+    columns:
+      - rfq_id
+      - reference_no
+      - title
+      - description
+      - delivery_location
+      - quantity
+      - supplier_types
+      - request_frequency
+      - company
+      - sender_id
+      - platform_code
+      - origin
+      - language_code
+      - created_at
+      - updated_at
+      - status
+      - version
+      - structured_data
+      - request_iteration_id
+      - converted_from_qdr
+      - category_id
+      - buyer_country
+    primary_key: rfq_id
+    initial_value: "1970-01-01"
+    cursor_column: created_at
+    updated_column: updated_at
+    enabled: false
+
+  - schema: public
+    table: mail_logs
+    columns:
+      - id
+      - message_id
+      - mail_type
+      - platform_code
+      - recipient_email
+      - rfq_id
+      - matching_id
+      - conversation_id
+      - status
+      - created_at
+      - modified_at
+      - supplier_id
+    primary_key: id
+    initial_value: "1970-01-01"
+    cursor_column: created_at
+    updated_column: modified_at
+    enabled: false
+
+  - schema: public
+    table: recommendations_notifications
+    columns:
+      - id
+      - supplier_id
+      - rfq_id
+      - status
+      - created_at
+      - modified_at
+      - unified_supplier_id
+    primary_key: id
+    initial_value: "1970-01-01"
+    cursor_column: created_at
+    updated_column: modified_at
+    enabled: false
