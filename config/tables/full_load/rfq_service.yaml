@@ -160,3 +160,54 @@ tables:
     table: rfq_content_quality
     output_table_name: rfq_service_rfq_content_quality
     enabled: true
+
+  - schema: public
+    table: recommended_supplier
+    output_table_name: recommended_supplier
+    enabled: true
+    select_sql: |
+      id,
+      rfq_id::text as rfq_id,
+      supplier_id::text as supplier_id,
+      COALESCE("name", '') as name,
+      COALESCE(website, '') as website,
+      COALESCE(profile_url, '') as profile_url,
+      COALESCE(country, '') as country,
+      COALESCE(distribution_area, '') as distribution_area,
+      COALESCE(description, '') as description,
+      COALESCE(description_de, '') as description_de,
+      COALESCE(description_en, '') as description_en,
+      COALESCE(array_to_json(supplier_types)::text, '[]') as supplier_types,
+      COALESCE(array_to_json(products)::text, '[]') as products,
+      COALESCE(array_to_json(keywords)::text, '[]') as keywords,
+      COALESCE(array_to_json(product_categories)::text, '[]') as product_categories,
+      created_at,
+      COALESCE(status, '') as status,
+      COALESCE(is_customer, false) as is_customer,
+      COALESCE(customer_in_need, false) as customer_in_need,
+      COALESCE(match_type, '') as match_type,
+      COALESCE(raw_recommendation_json::text, '') as raw_recommendation_json,
+      COALESCE(unified_supplier_id::text, '') as unified_supplier_id
+    output_columns:
+      - id
+      - rfq_id
+      - supplier_id
+      - name
+      - website
+      - profile_url
+      - country
+      - distribution_area
+      - description
+      - description_de
+      - description_en
+      - supplier_types
+      - products
+      - keywords
+      - product_categories
+      - created_at
+      - status
+      - is_customer
+      - customer_in_need
+      - match_type
+      - raw_recommendation_json
+      - unified_supplier_id
