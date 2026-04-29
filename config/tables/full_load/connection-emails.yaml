@@ -1,6 +1,8 @@
 tables:
   - schema: public
     table: send_email_request
+    output_table_name: send_email_request
+    enabled: true
     columns:
       - id
       - caller_service_message_id
@@ -19,8 +21,3 @@ tables:
       - sent_at
       - reply_to_email
       - caller_service_transaction_id
-    primary_key: id
-    initial_value: "1970-01-01"
-    cursor_column: created_at
-    updated_column: created_at
-    enabled: false

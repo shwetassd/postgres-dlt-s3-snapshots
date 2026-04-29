@@ -26,3 +26,50 @@ tables:
       - create_time
       - update_time
       - position
+
+  - schema: public
+    table: images
+    output_table_name: images
+    enabled: true
+    columns:
+      - id
+      - caption
+      - image_file
+      - offer_data_images
+      - create_time
+      - update_time
+      - position
+      - translations_caption
+    
+  - schema: public
+    table: uploads
+    output_table_name: uploads
+    enabled: true
+    columns:
+      - id
+      - filename
+      - create_time
+      - size
+      - mime_type
+      - url
+      - update_time
+      - origins_header_etag
+      - origins_header_last_modified
+      - origins_location
+      - amount_of_refs
+    
+  - schema: public
+    table: revisions
+    output_table_name: supplier_offers_revisions
+    enabled: true
+    columns:
+        - id
+        - create_time
+        - update_time
+        - source
+        - action
+        - client_id
+        - client_name
+        - supplier_id
+        - snapshot
+        - offer_id

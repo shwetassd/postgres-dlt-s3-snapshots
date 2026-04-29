@@ -49,3 +49,332 @@ tables:
       - monthly_limit
       - day_limit
       - paused
+
+  - schema: public
+    table: profile_visitors
+    output_table_name: profile_visitors
+    enabled: true
+    columns:
+    - id
+    - company_id
+    - visitor_company_id
+    - date
+    - visits
+    - created_at
+    - updated_at
+    - hostname
+    - match_type
+    - latitude
+    - longitude
+    - city_geoname_id
+    - country_geoname_id
+    - subdivision_geoname_ids
+    - customer_id
+    - visitor_customer_id
+    - domain
+    - subdivision_geoname_id
+    - matched_by
+    - full_tracking_allowed
+    - wlw_client_id
+    - unique_platform_users_status
+    - bot_detection_status
+    - external_company_id
+    - companies_visitor_company_id
+    - company_footprint_id
+    
+  - schema: public
+    table: category_visitors
+    output_table_name: category_visitors
+    enabled: true
+    columns:
+    - id
+    - category_id
+    - date
+    - visits
+    - visitor_company_id
+    - visitor_customer_id
+    - hostname
+    - domain
+    - match_type
+    - latitude
+    - longitude
+    - city_geoname_id
+    - country_geoname_id
+    - subdivision_geoname_ids
+    - subdivision_geoname_id
+    - created_at
+    - updated_at
+    - matched_by
+    - platform
+    - full_tracking_allowed
+    - wlw_client_id
+    - unique_platform_users_status
+    - bot_detection_status
+    - external_company_id
+    - companies_visitor_company_id
+    - company_footprint_id
+    
+  - schema: public
+    table: reviewed_visitors
+    output_table_name: reviewed_visitors
+    enabled: true
+    columns:
+    - id
+    - domain
+    - company_id
+    - url
+    - company_name
+    - postal_code
+    - city
+    - country_code
+    - street
+    - street_number
+    - company_manager
+    - email
+    - blacklisted
+    - created_at
+    - updated_at
+    - phone_number
+    
+  - schema: public
+    table: visitor_companies
+    output_table_name: visitor_companies
+    enabled: true
+    columns:
+    - id
+    - company_id
+    - customer_id
+    - domain
+    - homepage
+    - name
+    - country_code
+    - address
+    - email
+    - phone
+    - sources
+    - online_status
+    - review_state
+    - info
+    - created_at
+    - updated_at
+    - is_customer
+    - uuid
+    - ep_id
+    - normalized_name
+    - booked_site_codes
+    
+  - schema: public
+    table: ep_profile_visitors
+    output_table_name: ep_profile_visitors
+    enabled: true
+    columns:
+    - id
+    - date
+    - company_id
+    - visitor_company_id
+    - domain
+    - user_agent
+    - hostname
+    - external_company_id
+    - bot
+    - ip_blacklisted
+    - visits
+    - matched_by
+    - match_type
+    - latitude
+    - longitude
+    - city_geoname_id
+    - country_geoname_id
+    - subdivision_geoname_id
+    - subdivision_geoname_ids
+    - created_at
+    - updated_at
+    - customer_id
+    - tld
+    - recognition_status
+    - companies_visitor_company_id
+    - company_footprint_id
+    - hashed_ip
+    
+  - schema: public
+    table: visitors_wlw_profile_visits
+    output_table_name: visitors_wlw_profile_visits
+    enabled: true
+    columns:
+    - id
+    - visitor_id
+    - date
+    - created_at
+    - updated_at
+    - raw_visitor_id
+    
+  - schema: public
+    table: visitors_showroom_visits_v2
+    output_table_name: visitors_showroom_visits_v2
+    enabled: true
+    columns:
+    - id
+    - cpv_category_id
+    - category_names
+    - visitor_id
+    - raw_visitor_id
+    - offer_uuid
+    - product_name
+    - platform
+    - brand
+    - date
+    - created_at
+    - updated_at
+    - top_ranking
+    
+  - schema: public
+    table: visitors_search_visits_v2
+    output_table_name: visitors_search_visits_v2
+    enabled: true
+    columns:
+    - id
+    - visitor_id
+    - date
+    - raw_visitor_id
+    - keyword_title
+    - q
+    - city_title
+    - language
+    - platform
+    - category_names
+    - supplier_uuid
+    - category_id
+    - created_at
+    - updated_at
+    - brand
+    - product_uuid
+    - product_name
+    - top_ranking
+    
+  - schema: public
+    table: visitors_wlw_profile_visits_v2
+    output_table_name: visitors_wlw_profile_visits_v2
+    enabled: true
+    columns:
+    - id
+    - visitor_id
+    - date
+    - raw_visitor_id
+    - created_at
+    - updated_at
+    
+  - schema: public
+    table: visitors_ep_profile_visits_v2
+    output_table_name: visitors_ep_profile_visits_v2
+    enabled: true
+    columns:
+    - id
+    - visitor_id
+    - date
+    - raw_visitor_id
+    - tld
+    - created_at
+    - updated_at
+    
+  - schema: public
+    table: visitors_website_leads_visits_v2
+    output_table_name: visitors_website_leads_visits_v2
+    enabled: true
+    columns:
+    - id
+    - visitor_id
+    - date
+    - raw_visitor_id
+    - created_at
+    - updated_at
+    
+  - schema: public
+    table: visitors_product_details_page_visits_v2
+    output_table_name: visitors_product_details_page_visits_v2
+    enabled: true
+    columns:
+    - id
+    - visitor_id
+    - date
+    - raw_visitor_id
+    - product_id
+    - product_name
+    - image_url
+    - created_at
+    - updated_at
+    - offer_uuid
+    
+  - schema: public
+    table: visitors_ep_product_visits_v2
+    output_table_name: visitors_ep_product_visits_v2
+    enabled: true
+    columns:
+    - id
+    - visitor_id
+    - date
+    - raw_visitor_id
+    - tld
+    - created_at
+    - updated_at
+    - product_id
+    - product_name
+    - offer_uuid
+    
+  - schema: public
+    table: visitors_recommended_product_visits_v2
+    output_table_name: visitors_recommended_product_visits_v2
+    enabled: true
+    columns:
+    - id
+    - cpv_category_id
+    - category_names
+    - keyword_title
+    - visitor_id
+    - raw_visitor_id
+    - offer_uuid
+    - product_name
+    - top_ranking
+    - platform
+    - brand
+    - date
+    - created_at
+    - updated_at
+    
+  - schema: public
+    table: visitors_visitors_v2
+    output_table_name: visitors_visitors_v2
+    enabled: true
+    columns:
+    - id
+    - supplier_uuid
+    - visitor_company_id
+    - date
+    - visitor_country_code
+    - category_visit
+    - customer_homepage_visit
+    - ep_product_visit
+    - ep_profile_visit
+    - epage_visit
+    - product_details_page_visit
+    - search_visit
+    - wlw_profile_visit
+    - created_at
+    - updated_at
+    - showroom_visit
+    - recommended_products_visit
+    - top_ranking
+    - activity_level
+    - labels
+    
+  - schema: public
+    table: visitors_epage_visits_v2
+    output_table_name: visitors_epage_visits_v2
+    enabled: true
+    columns:
+    - id
+    - visitor_id
+    - date
+    - raw_visitor_id
+    - tld
+    - created_at
+    - updated_at

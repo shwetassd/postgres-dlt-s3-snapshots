@@ -1,6 +1,8 @@
 tables:
   - schema: public
     table: companies
+    output_table_name: companies
+    enabled: true
     columns:
       - customer_id
       - is_customer
@@ -15,8 +17,3 @@ tables:
       - wlw_id
       - ep_id
       - uuid
-    primary_key: uuid
-    initial_value: "1970-01-01"
-    cursor_column: created_at
-    updated_column: updated_at
-    enabled: false

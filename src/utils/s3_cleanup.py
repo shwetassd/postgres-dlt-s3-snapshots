@@ -37,10 +37,7 @@ def delete_table_snapshot_prefix(
     full_prefix = "/".join(prefix_parts) + "/"
     full_uri = f"s3://{bucket}/{full_prefix}"
 
-    log.info("Clearing existing snapshot under %s", full_uri)
-    log.info(
-        "Listing objects (large prefixes can take many minutes before the next log line)",
-    )
+    log.debug("Clearing existing snapshot under %s", full_uri)
 
     s3 = boto3.client("s3")
     paginator = s3.get_paginator("list_objects_v2")
@@ -61,7 +58,7 @@ def delete_table_snapshot_prefix(
                 total_deleted += len(keys_to_delete)
                 keys_to_delete = []
         if page_no == 1 or page_no % 50 == 0:
-            log.info(
+            log.debug(
                 "S3 list progress: %s object(s) (%s list page(s))",
                 total_listed,
                 page_no,
@@ -71,4 +68,4 @@ def delete_table_snapshot_prefix(
         s3.delete_objects(Bucket=bucket, Delete={"Objects": keys_to_delete})
         total_deleted += len(keys_to_delete)
 
-    log.info("S3 delete done: listed %s object(s), deleted %s", total_listed, total_deleted)
+    log.debug("S3 delete done: listed %s object(s), deleted %s", total_listed, total_deleted)

@@ -5,7 +5,6 @@ pipeline:
 destination:
   bucket_url_env: DESTINATION__FILESYSTEM__BUCKET_URL
   full_load_layout: "full_load/{table_name}/{snapshot_date}/{load_id}.{file_id}.{ext}"
-  delta_load_layout: "delta/{table_name}/{snapshot_date}/{load_id}.{file_id}.{ext}"
   full_load_delete_prefix_template: "full_load/{table_name}/{snapshot_date}"
   file_format: parquet
 
@@ -20,11 +19,3 @@ snapshot:
   mode: current_date
   date_format: "%Y/%m/%d"
   delete_existing_full_load_snapshot: true
-
-delta:
-  default_write_disposition: merge
-
-# Execution control
-execution:
-  # One of: full_then_delta, full_only, delta_only
-  run_mode: full_only

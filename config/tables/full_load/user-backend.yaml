@@ -12,3 +12,40 @@ tables:
       - rolled_back_at
       - started_at
       - applied_steps_count
+
+  - schema: public
+    table: "Profile"
+    output_table_name: user_backend_profile
+    enabled: true
+    columns:
+      - createTime
+      - updateTime
+      - createPlatform
+      - legacyWlwId
+      - legacyEpId
+      - id
+      - countryCode
+      - email
+      - givenName
+      - isAdmin
+      - preferredLanguage
+      - salutation
+      - surname
+      - mobile
+      - phone
+      - agreements
+      - identityId
+      - roles
+      - organisation
+      - alibabaId
+    
+  - schema: public
+    table: "SupplierProfile"
+    output_table_name: user_backend_supplierprofile
+    enabled: true
+    columns:
+      - id
+      - createTime
+      - updateTime
+      - profileId
+      - supplierFactId

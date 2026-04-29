@@ -58,13 +58,13 @@ def run_full_snapshot(
 
         @dlt.resource(name=table_name, write_disposition="append")
         def projected_rows():
-            log.info(
+            log.debug(
                 "Extracting %s.%s (chunksize=%s)",
                 schema_name,
                 source_table_name,
                 extract_chunk_size,
             )
-            log.info(
+            log.debug(
                 "Waiting for first SQL chunk from PostgreSQL — there will be no logs until it "
                 "returns (large/wide tables can take many minutes). "
                 "If this times out or OOMs, lower EXTRACT_CHUNK_SIZE in the job env (e.g. 10000).",
@@ -82,17 +82,12 @@ def run_full_snapshot(
                     chunk_no += 1
                     rows = len(chunk_df)
                     elapsed = time.monotonic() - t0
-                    if chunk_no == 1:
-                        log.info("First chunk rows=%s (elapsed=%.1fs)", rows, elapsed)
-                    elif chunk_no <= 5 or chunk_no % 10 == 0:
-                        log.info(
-                            "Chunk %s rows=%s (elapsed=%.1fs)",
-                            chunk_no,
-                            rows,
-                            elapsed,
-                        )
-                    else:
-                        log.debug("Chunk %s rows=%s (elapsed=%.1fs)", chunk_no, rows, elapsed)
+                    log.debug(
+                        "Chunk %s rows=%s (elapsed=%.1fs)",
+                        chunk_no,
+                        rows,
+                        elapsed,
+                    )
                     chunk_df = normalize_sql_chunk_dtypes(chunk_df)
                     yield chunk_df
 
