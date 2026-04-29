@@ -7,6 +7,7 @@ class FullLoadTableConfig:
     database: str
     schema: str
     table: str
+    output_table_name: Optional[str] = None
     columns: Optional[list[str]] = None
     select_sql: Optional[str] = None
     output_columns: Optional[list[str]] = None
@@ -23,6 +24,7 @@ class DeltaLoadTableConfig:
     cursor_column: str
     updated_column: str
     write_disposition: str = "merge"
+    output_table_name: Optional[str] = None
     columns: Optional[list[str]] = None
     select_sql: Optional[str] = None
     output_columns: Optional[list[str]] = None

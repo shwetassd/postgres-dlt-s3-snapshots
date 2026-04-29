@@ -1,8 +1,18 @@
 tables:
   - schema: public
     table: notifications
-    enabled: false
-    columns:
+    output_table_name: cns_notifications
+    enabled: true
+    select_sql: |
+      id::text as id,
+      platform,
+      user_profile_id::text as user_profile_id,
+      topic,
+      created_at,
+      updated_at,
+      category,
+      "label" as label
+    output_columns:
       - id
       - platform
       - user_profile_id
@@ -14,7 +24,8 @@ tables:
 
   - schema: public
     table: emails
-    enabled: false
+    enabled: true
+    output_table_name: cns_emails
     columns:
       - id
       - notification_id
@@ -35,12 +46,93 @@ tables:
 
   - schema: public
     table: configurations
-    enabled: false
+    output_table_name: cns_configurations
+    enabled: true
+    select_sql: |
+      id::text as id,
+      channel,
+      category,
+      topic,
+      time_window,
+      max_notifications,
+      created_at,
+      updated_at,
+      frequency_time_window,
+      frequency_count,
+      array_to_json(channel_priority)::text as channel_priority,
+      smart_channel_fallback_time_window
+    output_columns:
+      - id
+      - channel
+      - category
+      - topic
+      - time_window
+      - max_notifications
+      - created_at
+      - updated_at
+      - frequency_time_window
+      - frequency_count
+      - channel_priority
+      - smart_channel_fallback_time_window
 
   - schema: public
     table: mobile_push_notifications
-    enabled: false
+    output_table_name: cns_mobile_push_notifications
+    enabled: true
+    select_sql: |
+      id::text as id,
+      notification_id::text as notification_id,
+      title,
+      body,
+      "language" as language,
+      target_platforms::text as target_platforms,
+      custom_properties::text as custom_properties,
+      send_result,
+      created_at,
+      updated_at,
+      status,
+      status_details,
+      status_details_metadata::text as status_details_metadata,
+      event_timestamp
+    output_columns:
+      - id
+      - notification_id
+      - title
+      - body
+      - language
+      - target_platforms
+      - custom_properties
+      - send_result
+      - created_at
+      - updated_at
+      - status
+      - status_details
+      - status_details_metadata
+      - event_timestamp
 
   - schema: public
     table: web_notifications
-    enabled: false
+    output_table_name: cns_web_notifications
+    enabled: true
+    select_sql: |
+      id::text as id,
+      title,
+      template_id,
+      custom_properties::text as custom_properties,
+      web_push_send_result,
+      web_push_status,
+      web_push_status_details,
+      created_at,
+      updated_at,
+      notification_id::text as notification_id
+    output_columns:
+      - id
+      - title
+      - template_id
+      - custom_properties
+      - web_push_send_result
+      - web_push_status
+      - web_push_status_details
+      - created_at
+      - updated_at
+      - notification_id

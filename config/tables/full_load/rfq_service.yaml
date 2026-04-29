@@ -1,8 +1,22 @@
 tables:
   - schema: public
     table: matching_conversation
-    enabled: false
-    columns:
+    output_table_name: matching_conversation
+    enabled: true
+    select_sql: |
+      id,
+      matching_id::text as matching_id,
+      rfq_id::text as rfq_id,
+      supplier_uuid::text as supplier_uuid,
+      sender_user_id::text as sender_user_id,
+      conversation_id::text as conversation_id,
+      created_at,
+      first_reply_from_purchaser_at,
+      first_reply_message_from_supplier,
+      first_reply_from_supplier_at,
+      first_reply_message_from_purchaser,
+      unified_supplier_id::text as unified_supplier_id
+    output_columns:
       - id
       - matching_id
       - rfq_id
@@ -14,10 +28,12 @@ tables:
       - first_reply_message_from_supplier
       - first_reply_from_supplier_at
       - first_reply_message_from_purchaser
+      - unified_supplier_id
 
   - schema: public
     table: matching_logs
-    enabled: false
+    output_table_name: matching_logs
+    enabled: true
     columns:
       - id
       - matching_id
@@ -27,7 +43,8 @@ tables:
 
   - schema: public
     table: legacy_rfq_to_rfq_id_mapping
-    enabled: false
+    output_table_name: legacy_rfq_to_rfq_id_mapping
+    enabled: true
     columns:
       - id
       - legacy_rfq_id
@@ -37,11 +54,12 @@ tables:
 
   - schema: public
     table: matching_core
-    enabled: false
+    output_table_name: matching_core
+    enabled: true
     select_sql: |
-      matching_id,
-      rfq_id,
-      supplier_uuid,
+      matching_id::text as matching_id,
+      rfq_id::text as rfq_id,
+      supplier_uuid::text as supplier_uuid,
       REPLACE(REPLACE(supplier_name, E'\n', ' '), E'\r', ' ') AS supplier_name,
       supplier_key,
       supplier_platform_id,
@@ -50,59 +68,95 @@ tables:
       updated_at,
       published_at,
       status,
-      origin
+      origin,
+      unified_supplier_id::text as unified_supplier_id
+    output_columns:
+      - matching_id
+      - rfq_id
+      - supplier_uuid
+      - supplier_name
+      - supplier_key
+      - supplier_platform_id
+      - is_customer
+      - created_at
+      - updated_at
+      - published_at
+      - status
+      - origin
+      - unified_supplier_id
 
   - schema: public
     table: rfq_processing
-    enabled: false
+    output_table_name: rfq_processing
+    enabled: true
+    # Stable Arrow types across chunks (avoid timestamp vs string drift on nullable cols).
+    select_sql: |
+      id,
+      rfq_id::text AS rfq_id,
+      accepted_at,
+      accepted_by,
+      rejected_at,
+      rejected_by,
+      rejection_reason,
+      matching_started_at,
+      interested_suppliers,
+      edited_at,
+      edited_by,
+      closed_at,
+      closed_by,
+      expiry_date,
+      limit_reached_at::text AS limit_reached_at
+    output_columns:
+      - id
+      - rfq_id
+      - accepted_at
+      - accepted_by
+      - rejected_at
+      - rejected_by
+      - rejection_reason
+      - matching_started_at
+      - interested_suppliers
+      - edited_at
+      - edited_by
+      - closed_at
+      - closed_by
+      - expiry_date
+      - limit_reached_at
 
   - schema: public
     table: supplier_skip_list
-    enabled: false
+    output_table_name: supplier_skip_list
+    enabled: true
     columns:
       - id
       - supplier_uuid
       - created_at
 
-  - schema: public
-    table: recommended_supplier
-    enabled: false
-    columns:
-      - id
-      - rfq_id
-      - supplier_id
-      - name
-      - website
-      - profile_url
-      - country
-      - distribution_area
-      - description
-      - description_de
-      - description_en
-      - supplier_types
-      - products
-      - keywords
-      - product_categories
-      - created_at
-      - status
-      - is_customer
-      - customer_in_need
-      - match_type
-      - raw_recommendation_json
-
+      
   - schema: public
     table: rfq_user
-    enabled: false
+    output_table_name: rfq_user
+    enabled: true
     select_sql: |
       rfq_user_id,
-      user_profile_id,
+      user_profile_id::text as user_profile_id,
       replace(email, 'inactive_user_', '') AS email,
       full_name,
       language_code,
       country_code,
       created_at,
       updated_at
+    output_columns:
+      - rfq_user_id
+      - user_profile_id
+      - email
+      - full_name
+      - language_code
+      - country_code
+      - created_at
+      - updated_at
 
   - schema: public
     table: rfq_content_quality
-    enabled: false
+    output_table_name: rfq_service_rfq_content_quality
+    enabled: true

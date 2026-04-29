@@ -1,20 +1,32 @@
 tables:
   - schema: public
-    table: supplier_visitors_counts_mv
-    enabled: false
-    select_sql: |
-      supplier_uuid,
-      visitors_yesterday,
-      visitors_last_30_days,
-      visitors_last_12_months,
-      regexp_replace(last_visitor_name, '[\r\n]+', ' ') as last_visitor_name,
-      regexp_replace(last_visitor_address, '[\r\n]+', ' ') as last_visitor_address,
-      last_visitor_country
-
-  - schema: public
     table: customer_pixels
-    enabled: false
-    columns:
+    output_table_name: customer_pixels
+    enabled: true
+    select_sql: |
+      id,
+      company_id,
+      customer_id,
+      identifier,
+      domain,
+      company_name,
+      created_at,
+      updated_at,
+      status,
+      activated_at,
+      deactivated_at,
+      supplier_uuid::text as supplier_uuid,
+      visitor_company_id,
+      had_traffic,
+      domain_changed_at,
+      last_activity,
+      first_activity,
+      ep_id,
+      automatic_status_updates_disabled,
+      monthly_limit,
+      day_limit,
+      paused
+    output_columns:
       - id
       - company_id
       - customer_id

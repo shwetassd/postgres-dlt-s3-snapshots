@@ -1,7 +1,8 @@
 tables:
   - schema: public
     table: visable_pserp_switch_query_batch
-    enabled: false
+    output_table_name: pserp_switch_query_batch
+    enabled: true
     columns:
       - site_id
       - batch_name
@@ -9,7 +10,8 @@ tables:
 
   - schema: public
     table: visable_predict_cate
-    enabled: false
+    output_table_name: visable_predict_cate
+    enabled: true
     columns:
       - normilized_search_term
       - cat_id

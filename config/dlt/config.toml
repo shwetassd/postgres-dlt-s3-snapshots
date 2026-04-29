@@ -1,0 +1,10 @@
+# Synced to .dlt/config.toml at startup (see src/utils/dlt_project.py).
+# https://dlthub.com/docs/reference/performance
+
+# More workers = faster normalize (Parquet). Lower (e.g. 2) if Batch OOMs during normalize.
+[normalize]
+workers = 4
+
+[normalize.data_writer]
+# Start a new output file when buffered data exceeds this size (~10 MiB).
+file_max_bytes = 10485760

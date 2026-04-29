@@ -37,7 +37,7 @@ pip install -r requirements.txt
 
 ### 1) Environment variables
 
-This repo uses `python-dotenv` and calls `load_dotenv()`, so you can define variables in a local `.env` file (recommended).
+The same variable names must be set in the process environment: locally you can use a `.env` file via `python-dotenv` (`load_dotenv()` is called at startup). On **AWS Batch**, inject Postgres secrets from **Secrets Manager** and non-secret values (host, bucket URL, `POSTGRES_DB_*`, etc.) in the job definition environment, so no `.env` file is required in the container.
 
 **Postgres connection (required)**
 - `PG_HOST`

@@ -1,7 +1,8 @@
 tables:
   - schema: public
     table: platform_user
-    enabled: false
+    output_table_name: platform_user
+    enabled: true
     columns:
       - user_id
       - external_id
@@ -16,14 +17,16 @@ tables:
 
   - schema: public
     table: conversation_tag
-    enabled: false
+    output_table_name: conversation_tag
+    enabled: true
     columns:
       - conversation_id
       - tag
 
   - schema: public
     table: user_conversation_status
-    enabled: false
+    output_table_name: user_conversation_status
+    enabled: true
     columns:
       - user_id
       - conversation_id
@@ -34,7 +37,8 @@ tables:
 
   - schema: public
     table: user_organization
-    enabled: false
+    output_table_name: user_organization
+    enabled: true
     columns:
       - user_id
       - organization_id
@@ -43,7 +47,8 @@ tables:
 
   - schema: public
     table: spam_report
-    enabled: false
+    output_table_name: spam_report
+    enabled: true
     columns:
       - id
       - conversation_id

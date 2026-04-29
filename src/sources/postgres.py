@@ -20,10 +20,20 @@ def build_connection_string(database_name: str) -> str:
 
 def get_engine(database_name: str):
     conn_str = build_connection_string(database_name)
-    return create_engine(
-        conn_str,
+    # Optional: cancel SQL that runs longer than N ms so workers raise instead of blocking
+    # forever (otherwise FULL phase never reaches RUN SUMMARY). Default: unset = PG default.
+    connect_args: dict = {}
+    st_ms = os.getenv("PG_STATEMENT_TIMEOUT_MS", "").strip()
+    if st_ms.isdigit() and int(st_ms) > 0:
+        connect_args["options"] = f"-c statement_timeout={int(st_ms)}"
+    kw: dict = dict(
         pool_pre_ping=True,
-        pool_size=8,
-        max_overflow=8,
+        pool_size=12,
+        max_overflow=12,
         pool_recycle=1800,
     )
+    if connect_args:
+        kw["connect_args"] = connect_args
+    # Pool sized for parallel threads per DB; each distinct PG database uses its own engine/pool.
+    # If many DB aliases hit one RDS, lower pool_size or raise RDS max_connections.
+    return create_engine(conn_str, **kw)

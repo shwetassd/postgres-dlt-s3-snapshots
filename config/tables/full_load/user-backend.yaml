@@ -1,6 +1,7 @@
 tables:
   - schema: public
     table: _prisma_migrations
+    output_table_name: users_prisma_migrations
     enabled: true
     columns:
       - id

@@ -1,8 +1,17 @@
 tables:
   - schema: public
     table: online_products_counts_v2
-    enabled: false
-    columns:
+    output_table_name: online_products_counts
+    enabled: true
+    select_sql: |
+      package_name,
+      platforms,
+      company_uuid::text as company_uuid,
+      standard_limit,
+      boosted_limit,
+      standard,
+      boosted
+    output_columns:
       - package_name
       - platforms
       - company_uuid
@@ -11,11 +20,19 @@ tables:
       - standard
       - boosted
     
-
   - schema: public
     table: last_12_months
-    enabled: false
-    columns:
+    output_table_name: last_12_months
+    enabled: true
+    select_sql: |
+      platform,
+      uuid::text as uuid,
+      page,
+      serp,
+      request,
+      c2s,
+      c2p
+    output_columns: 
       - platform
       - uuid
       - page
@@ -24,11 +41,19 @@ tables:
       - c2s
       - c2p
     
-
   - schema: public
     table: last_30_days
-    enabled: false
-    columns:
+    output_table_name: last_30_days
+    enabled: true
+    select_sql: |
+      platform,
+      uuid::text as uuid,
+      page,
+      serp,
+      request,
+      c2s,
+      c2p
+    output_columns: 
       - platform
       - uuid
       - page
@@ -39,8 +64,15 @@ tables:
 
   - schema: public
     table: request_received_monthly_agg
-    enabled: false
-    columns:
+    output_table_name: request_received_monthly_agg
+    enabled: true
+    select_sql: |
+       date,
+       company_uuid::text as company_uuid,
+       platform,
+       rfi_received_nb,
+       rfq_received_nb
+    output_columns: 
       - date
       - company_uuid
       - platform
@@ -49,12 +81,115 @@ tables:
 
   - schema: public
     table: company
-    enabled: false
+    output_table_name: business_insights_company
+    enabled: true
+    select_sql: |
+      "uuid"::text as uuid,
+      retrieval_time,
+      active,
+      "action" as action,
+      coalesce(reason, '')::text as reason,
+      action_created_at,
+      array_to_json(platforms)::text as platforms,
+      "name" as name,
+      "domain" as domain,
+      country,
+      main_business_area,
+      "data"::text as data,
+      legacy_id::text as legacy_id,
+      primary_id::text as primary_id
+    output_columns:
+      - uuid
+      - retrieval_time
+      - active
+      - action
+      - reason
+      - action_created_at
+      - platforms
+      - name
+      - domain
+      - country
+      - main_business_area
+      - data
+      - legacy_id
+      - primary_id
 
   - schema: public
     table: membership
-    enabled: false
+    output_table_name: business_insights_membership
+    enabled: true
+    select_sql: |
+      id::text as id,
+      retrieval_time,
+      platform,
+      supplier_facts_uuid::text as supplier_facts_uuid,
+      active,
+      start_date,
+      expiry_date,
+      end_date,
+      company_name,
+      title,
+      is_platform_specific,
+      "data"::text as data,
+      boosted_product_limit,
+      standard_product_limit,
+      organization_uuid::text as organization_uuid
+    output_columns:
+      - id
+      - retrieval_time
+      - platform
+      - supplier_facts_uuid
+      - active
+      - start_date
+      - expiry_date
+      - end_date
+      - company_name
+      - title
+      - is_platform_specific
+      - data
+      - boosted_product_limit
+      - standard_product_limit
+      - organization_uuid
 
   - schema: public
     table: product
-    enabled: false
+    output_table_name: business_insights_product
+    enabled: true
+    select_sql: |
+      "uuid"::text as uuid,
+      company_uuid::text as company_uuid,
+      "name" as name,
+      logo,
+      boosted,
+      online,
+      has_price,
+      has_price_unit,
+      has_min_qty,
+      picture_count,
+      keyword_count,
+      cpv_count,
+      category_id,
+      retrieval_time,
+      created_at,
+      published_at,
+      updated_at,
+      deleted_at
+    output_columns:
+      - uuid
+      - company_uuid
+      - name
+      - logo
+      - boosted
+      - online
+      - has_price
+      - has_price_unit
+      - has_min_qty
+      - picture_count
+      - keyword_count
+      - cpv_count
+      - category_id
+      - retrieval_time
+      - created_at
+      - published_at
+      - updated_at
+      - deleted_at

@@ -1,13 +1,61 @@
 tables:
   - schema: public
     table: push_notification
-    enabled: false
+    output_table_name: push_notification
+    enabled: true
+    select_sql: |
+      id::text as id,
+      user_id,
+      de_message,
+      delivered,
+      message_read,
+      created_at,
+      updated_at,
+      hash_id,
+      reference_number,
+      notification_source,
+      notification_type,
+      en_message,
+      device_id,
+      email,
+      user_source,
+      company_id,
+      conversation_id,
+      sender_id,
+      message_from,
+      profile_id,
+      sender_profile_id,
+      user_setting_uuid::text as user_setting_uuid
+    output_columns:
+      - id
+      - user_id
+      - de_message
+      - delivered
+      - message_read
+      - created_at
+      - updated_at
+      - hash_id
+      - reference_number
+      - notification_source
+      - notification_type
+      - en_message
+      - device_id
+      - email
+      - user_source
+      - company_id
+      - conversation_id
+      - sender_id
+      - message_from
+      - profile_id
+      - sender_profile_id
+      - user_setting_uuid
 
   - schema: public
     table: purchaser_request
-    enabled: false
+    output_table_name: purchaser_request
+    enabled: true
     select_sql: |
-      id,
+      id::text as id,
       user_uuid,
       message_type,
       request_type,
@@ -19,10 +67,24 @@ tables:
       rfq_id,
       user_source,
       profile_id
+    output_columns:
+      - id
+      - user_uuid
+      - message_type
+      - request_type
+      - message
+      - created_at
+      - company_id
+      - product_id
+      - transaction_id
+      - rfq_id
+      - user_source
+      - profile_id
 
   - schema: public
     table: supplier_user_setting
-    enabled: false
+    output_table_name: supplier_user_setting
+    enabled: true
     columns:
       - id
       - user_id
@@ -42,11 +104,13 @@ tables:
 
   - schema: public
     table: user_setting
-    enabled: false
+    output_table_name: user_setting
+    enabled: true
 
   - schema: public
     table: ab_test_record
-    enabled: false
+    output_table_name: ab_test_record
+    enabled: true
     columns:
       - id
       - mobile_session_id
@@ -56,11 +120,13 @@ tables:
 
   - schema: public
     table: user_categories
-    enabled: false
+    output_table_name: user_categories
+    enabled: true
 
   - schema: public
     table: feedback
-    enabled: false
+    output_table_name: feedback
+    enabled: true
     select_sql: |
       id,
       email,
@@ -69,3 +135,11 @@ tables:
       created_at,
       updated_at,
       application_source
+    output_columns:
+      - id
+      - email
+      - subject
+      - message
+      - created_at
+      - updated_at
+      - application_source

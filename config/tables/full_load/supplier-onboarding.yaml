@@ -1,6 +1,7 @@
 tables:
   - schema: public
     table: import_task
+    output_table_name: import_task
     enabled: true
     columns:
       - id
@@ -16,6 +17,7 @@ tables:
 
   - schema: public
     table: report_imported_drafts
+    output_table_name: report_imported_drafts
     enabled: true
     columns:
       - import_task_id
@@ -27,6 +29,7 @@ tables:
 
   - schema: public
     table: report_published_drafts
+    output_table_name: report_published_drafts
     enabled: true
     columns:
       - import_task_id
@@ -37,11 +40,12 @@ tables:
 
   - schema: public
     table: report_product_filling_score
+    output_table_name: report_product_filling_score
     enabled: true
     select_sql: |
       id,
-      supplier_offer_id,
-      supplier_facts_id,
+      supplier_offer_id::text as supplier_offer_id,
+      supplier_facts_id::text as supplier_facts_id,
       category_score,
       description_score,
       image_score,
@@ -54,12 +58,12 @@ tables:
       adjusted_total_score,
       master_language,
       updated_at,
-      updated_by,
+      updated_by::text as updated_by,
       offer_status,
       record_created_at,
       record_updated_at,
       "snapshot"::text as snapshot,
-      platform
+      COALESCE(platform::text, ' ') AS platform
     output_columns:
       - id
       - supplier_offer_id
@@ -85,19 +89,20 @@ tables:
 
   - schema: public
     table: offers
+    output_table_name: supplier_onboarding_offers
     enabled: true
     select_sql: |
-      offer_id,
+      offer_id::text as offer_id,
       supplier_id,
-      product_details::text as product_details,
-      create_by,
+      COALESCE(product_details::text, '') as product_details,
+      COALESCE(create_by, '') as create_by,
       published,
       deleted,
       created_at,
       updated_at,
       status,
-      origin_product_id,
-      platforms::text as platforms
+      COALESCE(origin_product_id, '') as origin_product_id,
+      COALESCE(array_to_json(platforms)::text, '[]') as platforms
     output_columns:
       - offer_id
       - supplier_id
@@ -113,4 +118,5 @@ tables:
 
   - schema: public
     table: report_duplicate_offers
+    output_table_name: report_duplicate_offers
     enabled: true

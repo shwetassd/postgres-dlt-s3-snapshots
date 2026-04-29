@@ -1,7 +1,7 @@
 tables:
   - schema: public
     table: company_categories
-    enabled: false
+    enabled: true
     select_sql: |
       id,
       COALESCE(name -> 'de', '') AS name_de,
@@ -18,3 +18,19 @@ tables:
       created_at,
       updated_at,
       deprecated
+    output_columns:
+      - id
+      - name_de
+      - name_en
+      - name_fr
+      - desc_de
+      - desc_en
+      - desc_fr
+      - slug_de
+      - slug_en
+      - slug_fr
+      - kind
+      - parent_id
+      - created_at
+      - updated_at
+      - deprecated

@@ -1,8 +1,16 @@
 tables:
   - schema: public
     table: verticals
-    enabled: false
-    columns:
+    output_table_name: verticals
+    enabled: true
+    select_sql: |
+      id,
+      "name",
+      slug,
+      created_at,
+      updated_at,
+      array_to_json(company_category_ids)::text as company_category_ids
+    output_columns:
       - id
       - name
       - slug
@@ -12,7 +20,8 @@ tables:
 
   - schema: public
     table: concepts
-    enabled: false
+    output_table_name: concepts
+    enabled: true
     columns:
       - id
       - name
@@ -26,7 +35,8 @@ tables:
 
   - schema: public
     table: terms
-    enabled: false
+    output_table_name: terms
+    enabled: true
     columns:
       - id
       - concept_id
@@ -40,7 +50,8 @@ tables:
 
   - schema: public
     table: properties
-    enabled: false
+    output_table_name: properties
+    enabled: true
     columns:
       - id
       - name
@@ -52,7 +63,8 @@ tables:
 
   - schema: public
     table: concept_relationships
-    enabled: false
+    output_table_name: concept_relationships
+    enabled: true
     columns:
       - id
       - child_concept_id

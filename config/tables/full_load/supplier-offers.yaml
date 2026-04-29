@@ -1,6 +1,7 @@
 tables:
   - schema: public
     table: videos
+    output_table_name: videos
     enabled: true
     columns:
       - id
@@ -15,6 +16,7 @@ tables:
 
   - schema: public
     table: attachments
+    output_table_name: attachments
     enabled: true
     columns:
       - id

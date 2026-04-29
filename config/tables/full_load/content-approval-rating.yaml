@@ -1,33 +1,54 @@
 tables:
   - schema: public
     table: "CompanyRatings"
-    enabled: false
+    output_table_name: company_ratings
+    enabled: true
     select_sql: |
-      id,
+      id::text as id,
       "createdAt" as created_at,
       "updatedAt" as updated_at,
       "overrideTime" as override_time,
-      "restrictedIn" as restrictedin,
-      "keywordRating" as keyword_rating,
-      "llmRating" as llm_rating
+      "restrictedIn"::text as restrictedin,
+      "keywordRating"::text as keyword_rating,
+      "llmRating"::text as llm_rating
+    output_columns:
+      - id
+      - created_at
+      - updated_at
+      - override_time
+      - restrictedin
+      - keyword_rating
+      - llm_rating
 
   - schema: public
     table: "OfferRatings"
-    enabled: false
+    output_table_name: offer_ratings
+    enabled: true
     select_sql: |
-      id,
+      id::text as id,
       "createdAt" as created_at,
       "updatedAt" as updated_at,
       etag,
       "overrideTime" as override_time,
       "categoryRating" as category_rating,
-      "restrictedIn" as restrictedin,
-      "keywordRating" as keyword_rating,
-      "llmRating" as llm_rating
+      "restrictedIn"::text as restrictedin,
+      "keywordRating"::text as keyword_rating,
+      "llmRating"::text as llm_rating
+    output_columns:
+      - id
+      - created_at
+      - updated_at
+      - etag
+      - override_time
+      - category_rating
+      - restrictedin
+      - keyword_rating
+      - llm_rating
 
   - schema: public
     table: "_prisma_migrations"
-    enabled: false
+    output_table_name: content_prisma_migrations
+    enabled: true
     columns:
       - id
       - checksum

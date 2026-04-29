@@ -10,9 +10,11 @@ destination:
   file_format: parquet
 
 # Extraction tuning (speed vs memory/db load)
+# Higher chunk_size = fewer DB round trips (faster), more RAM per chunk. Tune EXTRACT_CHUNK_SIZE in Batch if OOM.
 extract:
-  chunk_size: 200000
-  backend: pyarrow
+  chunk_size: 75000
+  # Use pandas backend to avoid unsupported Arrow extension types (e.g. arrow.uuid)
+  backend: pandas
 
 snapshot:
   mode: current_date
@@ -26,5 +28,3 @@ delta:
 execution:
   # One of: full_then_delta, full_only, delta_only
   run_mode: full_only
-  # If true, completes all tables for one database before next
-  group_by_database: false

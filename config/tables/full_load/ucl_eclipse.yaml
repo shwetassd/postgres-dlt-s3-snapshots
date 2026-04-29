@@ -1,6 +1,7 @@
 tables:
   - schema: public
     table: bookable_keyword_v2
+    output_table_name: bookable_keyword
     enabled: true
     columns:
       - id
@@ -11,6 +12,7 @@ tables:
 
   - schema: public
     table: bookable_keyword_sales_information
+    output_table_name: bookable_keyword_sales_information
     enabled: true
     columns:
       - id
@@ -24,6 +26,7 @@ tables:
 
   - schema: public
     table: bookable_keyword_synonym
+    output_table_name: bookable_keyword_synonym
     enabled: true
     columns:
       - id
@@ -36,6 +39,7 @@ tables:
 
   - schema: public
     table: top_ranking_v1
+    output_table_name: top_ranking
     enabled: true
     select_sql: |
       id,
@@ -90,6 +94,7 @@ tables:
 
   - schema: public
     table: sponsored_brand_v1
+    output_table_name: sponsored_brand
     enabled: true
     select_sql: |
       id,
@@ -142,6 +147,7 @@ tables:
     
   - schema: public
     table: sales_order
+    output_table_name: sales_order
     enabled: true
     columns:
       - id
@@ -168,6 +174,7 @@ tables:
 
   - schema: public
     table: membership
+    output_table_name: ucl_membership
     enabled: true
     select_sql: |
       id,
@@ -238,6 +245,7 @@ tables:
 
   - schema: public
     table: organization
+    output_table_name: organization
     enabled: true
     columns:
       - organization_uuid

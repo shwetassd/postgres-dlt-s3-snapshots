@@ -1,11 +1,21 @@
 tables:
   - schema: public
     table: supplier_rfq_recommendation
+    output_table_name: supplier_rfq_recommendation
     enabled: true
-    columns:
+    select_sql: |
+      event_id,
+      event_time,
+      event_type,
+      supplier_id::text as supplier_id,
+      rfq_id::text as rfq_id,
+      conversation_id::text as conversation_id,
+      unified_supplier_id::text as unified_supplier_id
+    output_columns:
       - event_id
       - event_time
       - event_type
       - supplier_id
       - rfq_id
       - conversation_id
+      - unified_supplier_id
