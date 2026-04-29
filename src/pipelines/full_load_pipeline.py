@@ -1,4 +1,5 @@
 import logging
+import time
 
 import dlt
 from dlt.destinations import filesystem
@@ -69,6 +70,7 @@ def run_full_snapshot(
                 "If this times out or OOMs, lower EXTRACT_CHUNK_SIZE in the job env (e.g. 10000).",
             )
             chunk_no = 0
+            t0 = time.monotonic()
             # stream_results → server-side cursor; fewer round trips / lower peak buffering vs plain engine.
             with engine.connect() as raw_conn:
                 conn = raw_conn.execution_options(stream_results=True)
@@ -79,10 +81,18 @@ def run_full_snapshot(
                 ):
                     chunk_no += 1
                     rows = len(chunk_df)
+                    elapsed = time.monotonic() - t0
                     if chunk_no == 1:
-                        log.info("First chunk rows=%s", rows)
-                    elif chunk_no % 10 == 0:
-                        log.debug("Chunk %s rows=%s", chunk_no, rows)
+                        log.info("First chunk rows=%s (elapsed=%.1fs)", rows, elapsed)
+                    elif chunk_no <= 5 or chunk_no % 10 == 0:
+                        log.info(
+                            "Chunk %s rows=%s (elapsed=%.1fs)",
+                            chunk_no,
+                            rows,
+                            elapsed,
+                        )
+                    else:
+                        log.debug("Chunk %s rows=%s (elapsed=%.1fs)", chunk_no, rows, elapsed)
                     chunk_df = normalize_sql_chunk_dtypes(chunk_df)
                     yield chunk_df
 

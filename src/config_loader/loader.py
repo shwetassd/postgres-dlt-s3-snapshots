@@ -33,6 +33,7 @@ def load_full_load_tables() -> list[FullLoadTableConfig]:
             if not table.get("enabled", True):
                 continue
 
+            ecs = table.get("extract_chunk_size")
             all_tables.append(
                 FullLoadTableConfig(
                     database=database_name,
@@ -43,6 +44,7 @@ def load_full_load_tables() -> list[FullLoadTableConfig]:
                     select_sql=table.get("select_sql"),
                     output_columns=table.get("output_columns"),
                     enabled=table.get("enabled", True),
+                    extract_chunk_size=int(ecs) if ecs is not None else None,
                 )
             )
 

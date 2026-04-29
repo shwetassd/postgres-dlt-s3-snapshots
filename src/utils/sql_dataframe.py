@@ -51,5 +51,6 @@ def normalize_sql_chunk_dtypes(chunk_df: pd.DataFrame) -> pd.DataFrame:
             try:
                 chunk_df[col] = s.astype(pd.StringDtype())
             except (TypeError, ValueError):
-                pass
+                # JSON/text from PG occasionally mixes None, str, or decoded values — force Arrow-safe strings.
+                chunk_df[col] = s.map(_cell_to_stable_string).astype(pd.StringDtype())
     return chunk_df

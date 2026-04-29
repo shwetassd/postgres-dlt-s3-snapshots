@@ -12,6 +12,8 @@ class FullLoadTableConfig:
     select_sql: Optional[str] = None
     output_columns: Optional[list[str]] = None
     enabled: bool = True
+    # When set, overrides global EXTRACT_CHUNK_SIZE / settings extract.chunk_size for this table only.
+    extract_chunk_size: Optional[int] = None
 
 
 @dataclass

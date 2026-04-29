@@ -182,7 +182,11 @@ def run_one_full_table(table_cfg, configured_databases, runtime_cfg, engine_cach
         select_sql=table_cfg.select_sql,
         output_columns=table_cfg.output_columns,
         snapshot_date=runtime_cfg["snapshot_date"],
-        extract_chunk_size=runtime_cfg["extract_chunk_size"],
+        extract_chunk_size=(
+            table_cfg.extract_chunk_size
+            if table_cfg.extract_chunk_size is not None
+            else runtime_cfg["extract_chunk_size"]
+        ),
         extract_backend=runtime_cfg["extract_backend"],
     )
 
