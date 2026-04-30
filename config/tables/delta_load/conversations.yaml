@@ -1,0 +1,56 @@
+# Incremental loads — watermark via cursor_column `dlt_cursor` = cursor_expression per row.
+# Tables need created/modified timestamps (or equivalent in cursor_expression).
+tables:
+  - schema: public
+    table: conversation
+    output_table_name: conversation
+    enabled: true
+    columns:
+      - conversation_id
+      - organization_id
+      - request_type
+      - created_at
+      - modified_at
+      - sender_id
+      - product_id
+      - is_answered
+      - is_frozen
+      - is_archived
+      - hidden_from_sender
+      - platform_code
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, modified_at)
+
+  - schema: public
+    table: organization
+    output_table_name: organization
+    enabled: true
+    columns:
+      - organization_id
+      - organization_name
+      - description
+      - address
+      - country
+      - logo_url
+      - created_at
+      - modified_at
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, modified_at)
+
+
+  - schema: public
+    table: message
+    output_table_name: message
+    enabled: true
+    columns:
+      - id
+      - conversation_id
+      - message_type
+      - contents
+      - created_by
+      - created_at
+      - updated_at
+      - status
+      - sent_from
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, updated_at)

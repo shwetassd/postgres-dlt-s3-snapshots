@@ -1,10 +1,29 @@
 # Synced to .dlt/config.toml at startup (see src/utils/dlt_project.py).
 # https://dlthub.com/docs/reference/performance
 
+# Destination identifiers (including `{table_name}` in filesystem/S3 layout).
+# Default snake_case maps PascalCase YAML names: SupplierProfile -> supplier_profile.
+# `direct` keeps names aligned with config `output_table_name` / resource names (case-sensitive).
+# If you already loaded data under snake_case paths, changing this creates new paths unless you reset pipeline state.
+# Override per deploy: SCHEMA__NAMING=direct | snake_case | sql_cs_v1 | …
+# https://dlthub.com/docs/general-usage/naming-convention
+#
+# After switching naming, existing pipelines may raise TableIdentifiersFrozen until either:
+# - set allow_identifier_change_on_table_with_data=true (dlt may create new destination paths/tables), OR
+# - remove that pipeline folder under DLT_PIPELINES_DIR (fresh schema; loses incremental cursor for that table).
+[schema]
+naming = "direct"
+allow_identifier_change_on_table_with_data = true
+
 # More workers = faster normalize (Parquet). Lower (e.g. 2) if Batch OOMs during normalize.
 [normalize]
+# Keep moderate: parallel table loads (MAX_WORKERS_FULL) also consume CPU.
 workers = 4
 
 [normalize.data_writer]
-# Start a new output file when buffered data exceeds this size (~10 MiB).
-file_max_bytes = 10485760
+# Rotate output when buffer exceeds this size (larger = fewer file boundaries, more RAM in normalize).
+file_max_bytes = 16777216
+
+# Extract-stage buffering: fewer tiny staging files before normalize (throughput vs RAM).
+[sources.data_writer]
+file_max_items = 150000

@@ -14,18 +14,6 @@ tables:
       message_notifications_enabled
 
   - schema: public
-    table: supplier_subscriptions
-    output_table_name: supplier_subscriptions
-    enabled: true
-    columns:
-      - id
-      - profile_id
-      - supplier_uuid
-      - created_at
-      - updated_at
-      - checked_at
-
-  - schema: public
     table: notifications
     output_table_name: notifications
     enabled: true

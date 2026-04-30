@@ -82,48 +82,6 @@ tables:
       - profile_id
 
   - schema: public
-    table: supplier_user_setting
-    output_table_name: supplier_user_setting
-    enabled: true
-    columns:
-      - id
-      - user_id
-      - device_id
-      - general_push_notification
-      - request_push_notification
-      - visitor_push_notification
-      - is_active
-      - push_notification_token
-      - created_at
-      - updated_at
-      - locale
-      - email
-      - user_source
-      - enable_purchaser_notification
-      - company_ids
-
-  - schema: public
-    table: user_setting
-    output_table_name: user_setting
-    enabled: true
-
-  - schema: public
-    table: ab_test_record
-    output_table_name: ab_test_record
-    enabled: true
-    columns:
-      - id
-      - mobile_session_id
-      - experiment_name
-      - experiment_variant
-      - recorded_at
-
-  - schema: public
-    table: user_categories
-    output_table_name: user_categories
-    enabled: true
-
-  - schema: public
     table: feedback
     output_table_name: feedback
     enabled: true

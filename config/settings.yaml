@@ -6,16 +6,25 @@ destination:
   bucket_url_env: DESTINATION__FILESYSTEM__BUCKET_URL
   full_load_layout: "full_load/{table_name}/{snapshot_date}/{load_id}.{file_id}.{ext}"
   full_load_delete_prefix_template: "full_load/{table_name}/{snapshot_date}"
+  # Incremental / append layout (same placeholders). No replace-before-load — new files per run.
+  delta_load_layout: "delta_load/{table_name}/{snapshot_date}/{load_id}.{file_id}.{ext}"
   file_format: parquet
 
-# Extraction tuning (speed vs memory/db load)
-# Higher chunk_size = fewer DB round trips (faster), more RAM per chunk. Tune EXTRACT_CHUNK_SIZE in Batch if OOM.
+# Extraction tuning (speed vs memory / DB load)
+# - Higher chunk_size → fewer SQL round trips (faster extract), more RAM per chunk. Set EXTRACT_CHUNK_SIZE
+#   in Batch (e.g. 150000–200000 for narrow tables) if memory allows; lower if OOM.
+# - backend `pandas`: safest with mixed PG types (sql_database path). `pyarrow` can be faster for plain tables
+#   but may hit unsupported Arrow extension types — override with env EXTRACT_BACKEND=pyarrow per deployment test.
+# - Very heavy tables: set per-table extract_chunk_size in YAML (see rfq_service.yaml / statistics patterns).
 extract:
-  chunk_size: 75000
-  # Use pandas backend to avoid unsupported Arrow extension types (e.g. arrow.uuid)
+  chunk_size: 100000
   backend: pandas
 
 snapshot:
   mode: current_date
   date_format: "%Y/%m/%d"
   delete_existing_full_load_snapshot: true
+
+# Runtime env (not YAML): RUN_LOAD_TYPE=full|delta|both — see docs/load-types.md
+# SKIP_DELTA_WHEN_FULL_FAILS=1 — when RUN_LOAD_TYPE=both, skip DELTA if FULL had failures
+# PIPELINE_CLEAR_WORKDIR_BEFORE_RUN=1 — wipes ALL pipeline state under DLT_PIPELINES_DIR (including delta cursors)

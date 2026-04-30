@@ -17,3 +17,5 @@ tables:
       - wlw_id
       - ep_id
       - uuid
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, updated_at)

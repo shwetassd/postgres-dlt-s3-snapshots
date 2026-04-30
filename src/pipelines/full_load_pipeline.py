@@ -74,11 +74,19 @@ def run_full_snapshot(
             # stream_results → server-side cursor; fewer round trips / lower peak buffering vs plain engine.
             with engine.connect() as raw_conn:
                 conn = raw_conn.execution_options(stream_results=True)
-                for chunk_df in pd.read_sql_query(
+                read_kw: dict = dict(
                     sql=text(projected_query),
                     con=conn,
                     chunksize=extract_chunk_size,
-                ):
+                )
+                # Pandas 2+: nullable dtypes reduce Python object churn on large extracts.
+                try:
+                    major = int(pd.__version__.split(".", 1)[0])
+                    if major >= 2:
+                        read_kw["dtype_backend"] = "numpy_nullable"
+                except (ValueError, TypeError, AttributeError):
+                    pass
+                for chunk_df in pd.read_sql_query(**read_kw):
                     chunk_no += 1
                     rows = len(chunk_df)
                     elapsed = time.monotonic() - t0

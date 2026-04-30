@@ -1,10 +1,11 @@
 from pathlib import Path
 import yaml
 
-from src.models.table_config import FullLoadTableConfig
+from src.models.table_config import DeltaLoadTableConfig, FullLoadTableConfig
 
 
 FULL_LOAD_PATH = Path("config/tables/full_load")
+DELTA_LOAD_PATH = Path("config/tables/delta_load")
 
 
 def load_yaml(path: Path | str) -> dict:
@@ -44,6 +45,49 @@ def load_full_load_tables() -> list[FullLoadTableConfig]:
                     output_columns=table.get("output_columns"),
                     enabled=table.get("enabled", True),
                     extract_chunk_size=int(ecs) if ecs is not None else None,
+                )
+            )
+
+    return all_tables
+
+
+def load_delta_load_tables() -> list[DeltaLoadTableConfig]:
+    all_tables: list[DeltaLoadTableConfig] = []
+
+    if not DELTA_LOAD_PATH.is_dir():
+        return all_tables
+
+    for file in DELTA_LOAD_PATH.glob("*.yaml"):
+        database_name = file.stem
+        data = load_yaml(file)
+        tables = data.get("tables", [])
+
+        for table in tables:
+            if not table.get("enabled", True):
+                continue
+
+            ecs = table.get("extract_chunk_size")
+            cursor_col = table.get("cursor_column") or table.get("cursor")
+            if not cursor_col:
+                raise ValueError(
+                    f"Delta table {database_name}.{table.get('schema')}.{table.get('table')} "
+                    "must set cursor_column (e.g. updated_at)"
+                )
+
+            all_tables.append(
+                DeltaLoadTableConfig(
+                    database=database_name,
+                    schema=table["schema"],
+                    table=table["table"],
+                    cursor_column=str(cursor_col),
+                    cursor_expression=table.get("cursor_expression"),
+                    output_table_name=table.get("output_table_name"),
+                    columns=table.get("columns"),
+                    select_sql=table.get("select_sql"),
+                    output_columns=table.get("output_columns"),
+                    enabled=table.get("enabled", True),
+                    extract_chunk_size=int(ecs) if ecs is not None else None,
+                    initial_value=table.get("initial_value"),
                 )
             )
 

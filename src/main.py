@@ -1,16 +1,19 @@
+import gc
 import os
 import threading
 import time
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from dotenv import load_dotenv
 
 from src.config_loader.loader import (
     load_database_config,
+    load_delta_load_tables,
     load_full_load_tables,
     load_settings,
 )
+from src.pipelines.delta_load_pipeline import run_delta_snapshot
 from src.pipelines.full_load_pipeline import run_full_snapshot
 from src.sources.postgres import get_engine
 from src.utils.runtime_config import get_bucket_url, get_snapshot_date
@@ -26,18 +29,22 @@ from src.utils.logging_config import (
 )
 from src.utils.dlt_project import ensure_dlt_config_from_repo
 from src.utils.sns_notify import publish_load_failures
-from src.utils.transient_load_errors import is_retryable_full_load_error
+from src.utils.run_summary_format import build_run_summary_box
+from src.utils.transient_load_errors import (
+    is_memory_or_disk_exhaustion,
+    is_retryable_full_load_error,
+)
 from src.utils.workdir_cleanup import clear_pipeline_workdir
 
-load_dotenv()
+# Batch/ECS env must win over any .env baked into the image (override=False is the default).
+load_dotenv(override=False)
 silence_common_warnings()
 log = configure_logging()
 ensure_dlt_config_from_repo()
 
 
 def log_start(load_type: str, db: str, schema: str, table: str) -> None:
-    now = datetime.now().strftime("%H:%M:%S")
-    log.info("[%s] [START %s] %s.%s.%s", now, load_type, db, schema, table)
+    log.info("%-5s  start  %s.%s.%s", load_type, db, schema, table)
 
 
 def log_end(
@@ -52,22 +59,32 @@ def log_end(
     norm_counts: dict[str, int] | None = None,
 ) -> None:
     duration = int((datetime.now() - start_time).total_seconds())
-    status = "SUCCESS" if success else "FAILED"
-    parts = [
-        f"[END {load_type}]",
-        f"{db}.{schema}.{table}",
-        status,
-        f"{duration}s",
-    ]
+    status = "end" if success else "fail"
+    # Empty dict {} means 0 rows written — must not treat as falsy (or we show rows=n/a incorrectly).
+    tr: int | None = None
     if success and norm_counts is not None:
-        parts.append(f"rows_loaded={total_rows(norm_counts)}")
-        if len(norm_counts) > 1:
-            parts.append(f"per_resource={norm_counts}")
-    elif success and norm_counts is None:
-        parts.append("rows_loaded=n/a")
-    if error is not None:
-        parts.append(f"error={error}")
-    log.info(" | ".join(parts))
+        tr = total_rows(norm_counts)
+    if tr is not None and load_type == "DELTA" and tr == 0:
+        row_part = "rows=0 (incremental: nothing newer than cursor)"
+    elif tr is not None:
+        row_part = f"rows={tr}"
+    else:
+        row_part = "rows=n/a" if success else ""
+    extra = f"  {row_part}" if row_part else ""
+    if success and norm_counts is not None and len(norm_counts) > 1:
+        log.debug("%s.%s.%s per_resource counts: %s", db, schema, table, norm_counts)
+    err_part = f"  error={error!r}" if error is not None else ""
+    log.info(
+        "%-5s  %-4s  %s.%s.%s  %4ds%s%s",
+        load_type,
+        status,
+        db,
+        schema,
+        table,
+        duration,
+        extra,
+        err_part,
+    )
 
 
 def resolve_database_name(configured_databases: dict[str, str], database_alias: str) -> str:
@@ -97,105 +114,64 @@ def get_output_table_name(table_cfg) -> str:
     return getattr(table_cfg, "output_table_name", None) or table_cfg.table
 
 
-_SUMMARY_SEP = "=" * 80
-_SUMMARY_KV_WIDTH = 28
-
-
-def _summary_kv(label: str, value: object) -> None:
-    log.info("  %-*s %s", _SUMMARY_KV_WIDTH, label + ":", value)
+def _cleanup_before_full_load_retry(exc: BaseException, runtime_cfg: dict) -> None:
+    """ gc.collect() always; optional wipe of DLT pipeline workdir on OOM/ENOSPC (see env). """
+    gc.collect()
+    if os.getenv("FULL_LOAD_RETRY_CLEAR_PIPELINE_WORKDIR", "").lower() not in ("1", "true", "yes"):
+        return
+    if not is_memory_or_disk_exhaustion(exc):
+        return
+    log.warning(
+        "FULL_LOAD_RETRY_CLEAR_PIPELINE_WORKDIR: clearing %s after memory/disk pressure "
+        "(unsafe if multiple table loads share this dir in parallel).",
+        runtime_cfg["pipelines_dir"],
+    )
+    clear_pipeline_workdir(runtime_cfg["pipelines_dir"], logger=log)
 
 
 def log_run_summary(
     *,
     runtime_cfg: dict,
-    snapshot_settings: dict,
+    run_load_type: str,
     full_table_count: int,
     full_success: int,
     full_failed: int,
     full_rows: int,
+    delta_table_count: int,
+    delta_success: int,
+    delta_failed: int,
+    delta_rows: int,
+    max_workers_delta: int,
     total_time_sec: int,
     run_database: str | None,
     run_table: str | None,
     max_workers_full: int,
     serial_full_by_db: bool,
+    skipped_fail_fast: int = 0,
+    reported_exit_code: int | None = None,
 ) -> None:
-    """Single structured block for operators (filters, destination, outcome)."""
-    skip_delete = os.getenv("SKIP_DELETE_EXISTING_SNAPSHOT", "").lower() in (
-        "1",
-        "true",
-        "yes",
+    """Emit one boxed block (single log record) so operators can scan CloudWatch easily."""
+    box = build_run_summary_box(
+        runtime_cfg=runtime_cfg,
+        run_load_type=run_load_type,
+        full_table_count=full_table_count,
+        full_success=full_success,
+        full_failed=full_failed,
+        full_rows=full_rows,
+        delta_table_count=delta_table_count,
+        delta_success=delta_success,
+        delta_failed=delta_failed,
+        delta_rows=delta_rows,
+        max_workers_delta=max_workers_delta,
+        total_time_sec=total_time_sec,
+        run_database=run_database,
+        run_table=run_table,
+        max_workers_full=max_workers_full,
+        serial_full_by_db=serial_full_by_db,
+        skipped_fail_fast=skipped_fail_fast,
+        reported_exit_code=reported_exit_code,
     )
-    ok = full_failed == 0
-
-    log.info("")
-    log.info(_SUMMARY_SEP)
-    log.info("RUN SUMMARY")
-    log.info(_SUMMARY_SEP)
-
-    log.info("")
-    log.info("Job")
-    _summary_kv("Pipeline", runtime_cfg["pipeline_name"])
-    _summary_kv("Snapshot date", runtime_cfg["snapshot_date"])
-    _summary_kv("Snapshot mode", snapshot_settings.get("mode", ""))
-    _summary_kv("Date format (settings)", snapshot_settings.get("date_format", ""))
-    _summary_kv("Duration (wall clock)", f"{total_time_sec}s")
-    _summary_kv("Tables selected", full_table_count)
-
-    log.info("")
-    log.info("Filters (env)")
-    _summary_kv("RUN_DATABASE", run_database or "(none — all configured)")
-    _summary_kv("RUN_TABLE", run_table or "(none — all configured)")
-
-    log.info("")
-    log.info("Destination")
-    _summary_kv("Bucket URL", runtime_cfg["bucket_url"])
-    _summary_kv("Dataset", runtime_cfg["dataset_name"])
-    _summary_kv("Full load layout", runtime_cfg["full_load_layout"])
-    _summary_kv("Delete prefix template", runtime_cfg["full_load_delete_prefix_template"])
-    _summary_kv("File format", runtime_cfg["file_format"])
-    _summary_kv("DLT pipelines dir", runtime_cfg["pipelines_dir"])
-
-    log.info("")
-    log.info("Extract")
-    _summary_kv("Chunk size", runtime_cfg["extract_chunk_size"])
-    _summary_kv("Backend", runtime_cfg["extract_backend"])
-
-    log.info("")
-    log.info("Snapshot policy")
-    _summary_kv(
-        "Replace prefix before load",
-        "yes" if runtime_cfg["delete_existing_full_load_snapshot"] else "no",
-    )
-    _summary_kv("SKIP_DELETE_EXISTING_SNAPSHOT", "yes" if skip_delete else "no")
-
-    log.info("")
-    log.info("Parallelism")
-    _summary_kv("MAX_WORKERS_FULL", max_workers_full)
-    _summary_kv("FULL_LOAD_DATABASE_SERIAL", "yes" if serial_full_by_db else "no")
-
-    log.info("")
-    log.info("Transient load retries (S3/network)")
-    _summary_kv(
-        "FULL_LOAD_MAX_ATTEMPTS",
-        max(1, int(os.getenv("FULL_LOAD_MAX_ATTEMPTS", "3"))),
-    )
-    _summary_kv(
-        "FULL_LOAD_RETRY_DELAY_SECONDS (base, exponential)",
-        os.getenv("FULL_LOAD_RETRY_DELAY_SECONDS", "20"),
-    )
-
-    log.info("")
-    log.info("FULL load results")
-    _summary_kv("Succeeded", full_success)
-    _summary_kv("Failed", full_failed)
-    _summary_kv("Rows loaded (normalized metrics)", full_rows)
-
-    log.info("")
-    log.info("Outcome")
-    _summary_kv("Status", "SUCCESS" if ok else f"FAILED ({full_failed} table(s))")
-    _summary_kv("Process exit", "0" if ok else "1")
-
-    log.info(_SUMMARY_SEP)
+    log.info("\n%s", box)
 
 
 def _group_full_tables_by_database(full_tables: list) -> list[tuple[str, list]]:
@@ -232,7 +208,8 @@ def run_one_full_table(table_cfg, configured_databases, runtime_cfg, engine_cach
     actual_db = resolve_database_name(configured_databases, table_cfg.database)
     engine = get_engine_cached(engine_cache, engine_cache_lock, actual_db)
 
-    max_attempts = max(1, int(os.getenv("FULL_LOAD_MAX_ATTEMPTS", "3")))
+    # Default 1: schema/SQL mistakes fail once; raise FULL_LOAD_MAX_ATTEMPTS for S3/network retries only.
+    max_attempts = max(1, int(os.getenv("FULL_LOAD_MAX_ATTEMPTS", "1")))
     base_retry_delay = max(0.0, float(os.getenv("FULL_LOAD_RETRY_DELAY_SECONDS", "20")))
     skip_snapshot_delete = os.getenv("SKIP_DELETE_EXISTING_SNAPSHOT", "").lower() in (
         "1",
@@ -305,7 +282,7 @@ def run_one_full_table(table_cfg, configured_databases, runtime_cfg, engine_cach
             )
             if will_retry:
                 log.warning(
-                    "FULL load transient error %s.%s.%s (attempt %s/%s), retrying after %.1fs: %s",
+                    "FULL load infra/transient error %s.%s.%s (attempt %s/%s), retrying after %.1fs: %s",
                     table_cfg.database,
                     table_cfg.schema,
                     output_table_name,
@@ -314,6 +291,7 @@ def run_one_full_table(table_cfg, configured_databases, runtime_cfg, engine_cach
                     base_retry_delay * (2 ** (attempt - 1)),
                     e,
                 )
+                _cleanup_before_full_load_retry(e, runtime_cfg)
                 if runtime_cfg["delete_existing_full_load_snapshot"] and not skip_snapshot_delete:
                     prefix_key = (
                         f"{runtime_cfg['dataset_name']}|{runtime_cfg['snapshot_date']}|{output_table_name}"
@@ -329,6 +307,93 @@ def run_one_full_table(table_cfg, configured_databases, runtime_cfg, engine_cach
 
     return (
         "FULL",
+        table_cfg.database,
+        table_cfg.schema,
+        output_table_name,
+        start_time,
+        load_info,
+        norm_counts,
+    )
+
+
+def run_one_delta_table(table_cfg, configured_databases, runtime_cfg, engine_cache, engine_cache_lock):
+    start_time = datetime.now()
+    output_table_name = get_output_table_name(table_cfg)
+
+    log_start("DELTA", table_cfg.database, table_cfg.schema, output_table_name)
+
+    actual_db = resolve_database_name(configured_databases, table_cfg.database)
+    engine = get_engine_cached(engine_cache, engine_cache_lock, actual_db)
+
+    max_attempts = max(
+        1,
+        int(os.getenv("DELTA_LOAD_MAX_ATTEMPTS", os.getenv("FULL_LOAD_MAX_ATTEMPTS", "1"))),
+    )
+    base_retry_delay = max(
+        0.0,
+        float(os.getenv("DELTA_LOAD_RETRY_DELAY_SECONDS", os.getenv("FULL_LOAD_RETRY_DELAY_SECONDS", "20"))),
+    )
+
+    load_info = None
+    norm_counts = None
+    attempt = 0
+    while attempt < max_attempts:
+        attempt += 1
+        try:
+            load_info, norm_counts = run_delta_snapshot(
+                engine=engine,
+                pipeline_name=build_pipeline_name(
+                    runtime_cfg["pipeline_name"],
+                    "delta",
+                    table_cfg.database,
+                    table_cfg.schema,
+                    output_table_name,
+                ),
+                pipelines_dir=runtime_cfg["pipelines_dir"],
+                dataset_name=runtime_cfg["dataset_name"],
+                bucket_url=runtime_cfg["bucket_url"],
+                layout=runtime_cfg["delta_load_layout"],
+                file_format=runtime_cfg["file_format"],
+                schema_name=table_cfg.schema,
+                source_table_name=table_cfg.table,
+                table_name=output_table_name,
+                cursor_column=table_cfg.cursor_column,
+                columns=table_cfg.columns,
+                select_sql=table_cfg.select_sql,
+                output_columns=table_cfg.output_columns,
+                snapshot_date=runtime_cfg["snapshot_date"],
+                extract_chunk_size=(
+                    table_cfg.extract_chunk_size
+                    if table_cfg.extract_chunk_size is not None
+                    else runtime_cfg["extract_chunk_size"]
+                ),
+                extract_backend=runtime_cfg["extract_backend"],
+                initial_value=table_cfg.initial_value,
+                cursor_expression=table_cfg.cursor_expression,
+            )
+            break
+        except Exception as e:
+            will_retry = attempt < max_attempts and is_retryable_full_load_error(e)
+            if will_retry:
+                log.warning(
+                    "DELTA load infra/transient error %s.%s.%s (attempt %s/%s), retrying after %.1fs: %s",
+                    table_cfg.database,
+                    table_cfg.schema,
+                    output_table_name,
+                    attempt,
+                    max_attempts,
+                    base_retry_delay * (2 ** (attempt - 1)),
+                    e,
+                )
+                _cleanup_before_full_load_retry(e, runtime_cfg)
+                time.sleep(base_retry_delay * (2 ** (attempt - 1)))
+                continue
+            raise
+
+    assert load_info is not None and norm_counts is not None
+
+    return (
+        "DELTA",
         table_cfg.database,
         table_cfg.schema,
         output_table_name,
@@ -379,6 +444,15 @@ def run_phase(
     failed = 0
     failures: list[str] = []
     rows_total = 0
+    skipped_fail_fast = 0
+    fail_fast = (
+        phase_name == "FULL"
+        and os.getenv("FULL_LOAD_FAIL_FAST", "").lower() in ("1", "true", "yes")
+    ) or (
+        phase_name == "DELTA"
+        and os.getenv("DELTA_LOAD_FAIL_FAST", "").lower() in ("1", "true", "yes")
+    )
+    fail_fast_cancel_done = False
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_cfg = {
@@ -387,31 +461,33 @@ def run_phase(
             ): t
             for t in tables
         }
+        ff_note = " fail_fast" if fail_fast else ""
         log.info(
-            "%s phase: queued %s table task(s), max_workers=%s",
+            "%s phase: %s table(s)   workers=%s%s",
             phase_name,
             len(tables),
             max_workers,
+            ff_note,
         )
         if phase_name == "FULL" and runtime_cfg.get("delete_existing_full_load_snapshot"):
             if os.getenv("SKIP_DELETE_EXISTING_SNAPSHOT", "").lower() in ("1", "true", "yes"):
                 log.info(
-                    "FULL: SKIP_DELETE_EXISTING_SNAPSHOT — existing S3 objects under snapshot_date=%s "
-                    "are not deleted before extract.",
+                    "FULL: snapshot_date=%s — not deleting existing S3 objects (SKIP_DELETE_EXISTING_SNAPSHOT)",
                     runtime_cfg["snapshot_date"],
                 )
             else:
-                log.info(
-                    "FULL: before each table's extract, that table's S3 prefix for snapshot_date=%s is "
-                    "cleared once (replace prior run); duplicate clears for the same output table are skipped.",
+                log.debug(
+                    "FULL: replacing each table prefix under snapshot_date=%s before extract",
                     runtime_cfg["snapshot_date"],
                 )
         if phase_name == "FULL":
-            log.info(
-                "FULL: If this phase never logs \"phase finished\" below, a worker is still "
-                "blocked (long SQL / I/O) or the process was OOM-killed — see PG_STATEMENT_TIMEOUT_MS "
-                "and CloudWatch/ECS stop reason.",
+            log.debug(
+                "FULL: long stalls usually mean SQL/I/O in flight or OOM; check PG_STATEMENT_TIMEOUT_MS / ECS",
             )
+            if fail_fast:
+                log.info("FULL: fail_fast — pending tasks cancel after first failure (running tasks finish)")
+        if phase_name == "DELTA" and fail_fast:
+            log.info("DELTA: fail_fast — pending tasks cancel after first failure (running tasks finish)")
         stop_watchdog = threading.Event()
         watchdog = threading.Thread(
             target=_phase_watchdog,
@@ -437,7 +513,7 @@ def run_phase(
                         norm_counts=norm_counts,
                     )
                     if debug_load_info:
-                        log.info("load_info=%s", load_info)
+                        log.debug("load_info=%s", load_info)
                     if not norm_counts:
                         log.debug(
                             "No normalize row_counts in trace for %s.%s.%s (dlt may omit in some paths)",
@@ -446,6 +522,24 @@ def run_phase(
                             table,
                         )
                     success += 1
+                except CancelledError:
+                    skipped_fail_fast += 1
+                    ff_env = (
+                        "FULL_LOAD_FAIL_FAST"
+                        if phase_name == "FULL"
+                        else "DELTA_LOAD_FAIL_FAST"
+                        if phase_name == "DELTA"
+                        else "FAIL_FAST"
+                    )
+                    log.info(
+                        "[%s] skipped (%s): %s.%s.%s — pending task cancelled "
+                        "after another table failed.",
+                        phase_name,
+                        ff_env,
+                        cfg.database,
+                        cfg.schema,
+                        out_name,
+                    )
                 except Exception as e:
                     log.exception(
                         "%s failed database=%s schema=%s source_table=%s output_table=%s",
@@ -459,12 +553,33 @@ def run_phase(
                     failures.append(
                         f"{cfg.database}.{cfg.schema}.{out_name}: {type(e).__name__}: {e}"
                     )
+                    if fail_fast and not fail_fast_cancel_done:
+                        fail_fast_cancel_done = True
+                        ncancel = 0
+                        for f in future_to_cfg:
+                            if not f.done() and f.cancel():
+                                ncancel += 1
+                        still_running = sum(1 for f in future_to_cfg if not f.done())
+                        ff_env = (
+                            "FULL_LOAD_FAIL_FAST"
+                            if phase_name == "FULL"
+                            else "DELTA_LOAD_FAIL_FAST"
+                            if phase_name == "DELTA"
+                            else "FAIL_FAST"
+                        )
+                        log.warning(
+                            "[%s] %s: cancelled %s pending table load(s); "
+                            "%s worker(s) still active until they finish.",
+                            phase_name,
+                            ff_env,
+                            ncancel,
+                            still_running,
+                        )
         finally:
             stop_watchdog.set()
 
-    log.info("%s phase: all worker threads finished — summary counts follow.", phase_name)
     log.info(
-        "%s phase finished: success=%s failed=%s rows_total=%s",
+        "%s phase done: ok=%s failed=%s rows=%s",
         phase_name,
         success,
         failed,
@@ -473,12 +588,14 @@ def run_phase(
     if failed:
         log.error(
             "%s phase: %s table load(s) FAILED — traceback is logged above per failed table. "
-            "Process exits with code 1 after RUN SUMMARY if this run has any failed tables.",
+            "Process exit code depends on EXIT_ON_TABLE_FAILURES (see RUN SUMMARY).",
             phase_name,
             failed,
         )
+    if failed or skipped_fail_fast:
+        log.debug("%s phase: failures logged above; RUN SUMMARY follows", phase_name)
 
-    return success, failed, failures, rows_total
+    return success, failed, failures, rows_total, skipped_fail_fast
 
 
 def main() -> None:
@@ -487,30 +604,68 @@ def main() -> None:
     settings = load_settings()
     databases_config = load_database_config()
 
-    full_tables = load_full_load_tables()
+    # Distinguish unset vs empty: unset → full; empty string → invalid below.
+    _raw_run_load_type = os.environ.get("RUN_LOAD_TYPE")
+    if _raw_run_load_type is None:
+        run_load_type = "full"
+    else:
+        run_load_type = _raw_run_load_type.strip().lower()
+    log.debug(
+        "RUN_LOAD_TYPE raw=%r resolved=%r",
+        _raw_run_load_type,
+        run_load_type,
+    )
+    if run_load_type not in ("full", "delta", "both"):
+        log.error("RUN_LOAD_TYPE must be one of: full, delta, both (got %r)", run_load_type)
+        raise SystemExit(2)
+
+    full_tables = load_full_load_tables() if run_load_type in ("full", "both") else []
+    delta_tables = load_delta_load_tables() if run_load_type in ("delta", "both") else []
 
     run_database = os.getenv("RUN_DATABASE")
     run_table = os.getenv("RUN_TABLE")
 
     if run_database:
         full_tables = [t for t in full_tables if t.database == run_database]
+        delta_tables = [t for t in delta_tables if t.database == run_database]
 
     if run_table:
         full_tables = [t for t in full_tables if t.table == run_table]
+        delta_tables = [t for t in delta_tables if t.table == run_table]
 
-    log.info(
-        "Filters RUN_DATABASE=%s RUN_TABLE=%s",
-        run_database,
-        run_table,
-    )
     n_full = len(full_tables)
-    log.info("Selected FULL=%s table(s)", n_full)
+    n_delta = len(delta_tables)
+    log.info(
+        "run   mode=%s   tables   full=%s   delta=%s   RUN_DATABASE=%s   RUN_TABLE=%s",
+        run_load_type,
+        n_full,
+        n_delta,
+        run_database or "*",
+        run_table or "*",
+    )
 
-    if (run_database or run_table) and len(full_tables) == 0:
-        detected_full = sorted(p.stem for p in Path("config/tables/full_load").glob("*.yaml"))
-        log.error("No tables selected for the provided filters.")
-        log.error("Detected full-load db configs: %s", detected_full)
-        raise SystemExit(1)
+    delta_load_dir = Path("config/tables/delta_load")
+    detected_delta = (
+        sorted(p.stem for p in delta_load_dir.glob("*.yaml")) if delta_load_dir.is_dir() else []
+    )
+
+    if run_database or run_table:
+        if n_full == 0 and n_delta == 0:
+            detected_full = sorted(p.stem for p in Path("config/tables/full_load").glob("*.yaml"))
+            log.error("No tables selected for the provided filters.")
+            log.error("Detected full-load db configs: %s", detected_full)
+            log.error("Detected delta-load db configs: %s", detected_delta)
+            raise SystemExit(1)
+    else:
+        if run_load_type == "full" and n_full == 0:
+            log.error("RUN_LOAD_TYPE=full but no enabled full-load tables.")
+            raise SystemExit(1)
+        if run_load_type == "delta" and n_delta == 0:
+            log.error("RUN_LOAD_TYPE=delta but no enabled delta-load tables.")
+            raise SystemExit(1)
+        if run_load_type == "both" and n_full == 0 and n_delta == 0:
+            log.error("RUN_LOAD_TYPE=both but no enabled full- or delta-load tables.")
+            raise SystemExit(1)
 
     configured_databases = {
         item["name"]: item["env_database_key"] for item in databases_config.get("databases", [])
@@ -524,6 +679,10 @@ def main() -> None:
         "pipelines_dir": get_pipelines_dir(),
         "full_load_layout": settings["destination"]["full_load_layout"],
         "full_load_delete_prefix_template": settings["destination"]["full_load_delete_prefix_template"],
+        "delta_load_layout": settings["destination"].get(
+            "delta_load_layout",
+            "delta_load/{table_name}/{snapshot_date}/{load_id}.{file_id}.{ext}",
+        ),
         "file_format": settings["destination"]["file_format"],
         "delete_existing_full_load_snapshot": settings["snapshot"]["delete_existing_full_load_snapshot"],
         "extract_chunk_size": int(
@@ -540,10 +699,17 @@ def main() -> None:
 
     if os.getenv("PIPELINE_CLEAR_WORKDIR_BEFORE_RUN", "").lower() in ("1", "true", "yes"):
         clear_pipeline_workdir(runtime_cfg["pipelines_dir"], logger=log)
+        if n_delta > 0:
+            log.warning(
+                "PIPELINE_CLEAR_WORKDIR_BEFORE_RUN removed pipeline state under %s — incremental "
+                "(delta) cursors were wiped; delta extracts in this job behave like first-time loads.",
+                runtime_cfg["pipelines_dir"],
+            )
 
     # Default 4: many parallel dlt→S3 uploads (per table) can hit connection / Content-Length issues
     # at high MAX_WORKERS_FULL; override in env if the job is small or S3 is very quiet.
     max_full = int(os.getenv("MAX_WORKERS_FULL", "4"))
+    max_delta = int(os.getenv("MAX_WORKERS_DELTA", "4"))
     if n_full >= 50 and max_full > 6:
         log.info(
             "Many tables (%s) with MAX_WORKERS_FULL=%s — if S3 upload errors persist, try 3–4.",
@@ -552,31 +718,61 @@ def main() -> None:
         )
     debug_load_info = bool(run_database or run_table)
 
+    if run_load_type == "both":
+        log.info(
+            "both: FULL phase then DELTA (same process, dlt state under %s)",
+            runtime_cfg["pipelines_dir"],
+        )
+
     engine_cache: dict[str, object] = {}
     engine_cache_lock = threading.Lock()
 
     full_success = full_failed = 0
     full_rows = 0
+    full_skipped_fail_fast = 0
+    delta_success = delta_failed = 0
+    delta_rows = 0
+    delta_skipped_fail_fast = 0
     failed_tables: list[str] = []
 
     serial_full_by_db = os.getenv("FULL_LOAD_DATABASE_SERIAL", "").lower() in ("1", "true", "yes")
-    if serial_full_by_db:
-        batches = _group_full_tables_by_database(full_tables)
-        log.info(
-            "FULL load: FULL_LOAD_DATABASE_SERIAL — %s database alias(es) run one after another; "
-            "within each alias up to MAX_WORKERS_FULL=%s table(s) in parallel.",
-            len(batches),
-            max_full,
-        )
-        for db_alias, tables_in_db in batches:
+    if run_load_type in ("full", "both") and n_full > 0:
+        if serial_full_by_db:
+            batches = _group_full_tables_by_database(full_tables)
             log.info(
-                "FULL load: starting database alias=%r (%s table(s))",
-                db_alias,
-                len(tables_in_db),
+                "FULL: SERIAL_BY_DB — %s database group(s), workers=%s parallel within each group",
+                len(batches),
+                max_full,
             )
-            s, f, errs, rsum = run_phase(
+            for db_alias, tables_in_db in batches:
+                log.info("FULL: group %r (%s table(s))", db_alias, len(tables_in_db))
+                s, f, errs, rsum, skip_ff = run_phase(
+                    "FULL",
+                    tables_in_db,
+                    max_workers=max_full,
+                    worker_fn=run_one_full_table,
+                    configured_databases=configured_databases,
+                    runtime_cfg=runtime_cfg,
+                    engine_cache=engine_cache,
+                    engine_cache_lock=engine_cache_lock,
+                    debug_load_info=debug_load_info,
+                )
+                full_success += s
+                full_failed += f
+                full_rows += rsum
+                full_skipped_fail_fast += skip_ff
+                failed_tables.extend(errs)
+                _dispose_engine_for_database_alias(
+                    db_alias,
+                    configured_databases,
+                    engine_cache,
+                    engine_cache_lock,
+                )
+                log.debug("FULL: finished group %r", db_alias)
+        else:
+            s, f, errs, rsum, skip_ff = run_phase(
                 "FULL",
-                tables_in_db,
+                full_tables,
                 max_workers=max_full,
                 worker_fn=run_one_full_table,
                 configured_databases=configured_databases,
@@ -588,45 +784,77 @@ def main() -> None:
             full_success += s
             full_failed += f
             full_rows += rsum
+            full_skipped_fail_fast += skip_ff
             failed_tables.extend(errs)
-            _dispose_engine_for_database_alias(
-                db_alias,
-                configured_databases,
-                engine_cache,
-                engine_cache_lock,
-            )
-            log.info("FULL load: completed database alias=%r", db_alias)
-    else:
-        s, f, errs, rsum = run_phase(
-            "FULL",
-            full_tables,
-            max_workers=max_full,
-            worker_fn=run_one_full_table,
+
+    skip_delta_phase = (
+        run_load_type == "both"
+        and n_delta > 0
+        and full_failed > 0
+        and os.getenv("SKIP_DELTA_WHEN_FULL_FAILS", "").lower() in ("1", "true", "yes")
+    )
+    if skip_delta_phase:
+        log.warning(
+            "SKIP_DELTA_WHEN_FULL_FAILS: FULL had %s failure(s) — skipping DELTA phase this run.",
+            full_failed,
+        )
+    elif run_load_type == "both" and n_delta > 0 and full_failed > 0:
+        log.warning(
+            "FULL had %s failure(s); DELTA phase still runs. "
+            "Set SKIP_DELTA_WHEN_FULL_FAILS=1 to skip DELTA after FULL failures.",
+            full_failed,
+        )
+
+    if run_load_type in ("delta", "both") and n_delta > 0 and not skip_delta_phase:
+        s, f, errs, rsum, skip_ff = run_phase(
+            "DELTA",
+            delta_tables,
+            max_workers=max_delta,
+            worker_fn=run_one_delta_table,
             configured_databases=configured_databases,
             runtime_cfg=runtime_cfg,
             engine_cache=engine_cache,
             engine_cache_lock=engine_cache_lock,
             debug_load_info=debug_load_info,
         )
-        full_success += s
-        full_failed += f
-        full_rows += rsum
+        delta_success += s
+        delta_failed += f
+        delta_rows += rsum
+        delta_skipped_fail_fast += skip_ff
         failed_tables.extend(errs)
 
     total_time = int((datetime.now() - overall_start).total_seconds())
 
+    exit_on_table_failures = os.getenv("EXIT_ON_TABLE_FAILURES", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    reported_exit_code = (
+        1
+        if (full_failed > 0 or delta_failed > 0) and exit_on_table_failures
+        else 0
+    )
+
     log_run_summary(
         runtime_cfg=runtime_cfg,
-        snapshot_settings=settings["snapshot"],
-        full_table_count=len(full_tables),
+        run_load_type=run_load_type,
+        full_table_count=n_full,
         full_success=full_success,
         full_failed=full_failed,
         full_rows=full_rows,
+        delta_table_count=n_delta,
+        delta_success=delta_success,
+        delta_failed=delta_failed,
+        delta_rows=delta_rows,
+        max_workers_delta=max_delta,
         total_time_sec=total_time,
         run_database=run_database,
         run_table=run_table,
         max_workers_full=max_full,
         serial_full_by_db=serial_full_by_db,
+        skipped_fail_fast=full_skipped_fail_fast + delta_skipped_fail_fast,
+        reported_exit_code=reported_exit_code,
     )
     flush_logging_handlers()
 
@@ -644,21 +872,58 @@ def main() -> None:
             )
             time.sleep(delay_sec)
             flush_logging_handlers()
-        log.info(
-            "Publishing SNS failure digest (%s failed table(s)).",
-            len(failed_tables),
+        batch_attempt = (os.getenv("AWS_BATCH_JOB_ATTEMPT") or "").strip()
+        attempt_no = int(batch_attempt) if batch_attempt.isdigit() else 1
+        force_digest = os.getenv("SNS_ALWAYS_PUBLISH_FAILURE_DIGEST", "").lower() in (
+            "1",
+            "true",
+            "yes",
         )
-        flush_logging_handlers()
-        publish_load_failures(
-            failed_tables,
-            pipeline_name=runtime_cfg["pipeline_name"],
-            snapshot_date=runtime_cfg["snapshot_date"],
-            bucket_url=runtime_cfg["bucket_url"],
-            dataset_name=runtime_cfg["dataset_name"],
+        # Batch re-runs the container on failure — each run would publish again unless we skip repeats.
+        skip_duplicate_retry = (
+            attempt_no > 1
+            and not force_digest
+            and os.getenv("SNS_PUBLISH_FAILURE_DIGEST_ON_BATCH_RETRY_ONLY_ONCE", "1").lower()
+            not in ("0", "false", "no")
         )
+        if skip_duplicate_retry:
+            log.info(
+                "Skipping SNS failure digest on Batch retry (AWS_BATCH_JOB_ATTEMPT=%s) — "
+                "already published on attempt 1. Every attempt: SNS_ALWAYS_PUBLISH_FAILURE_DIGEST=1. "
+                "Disable skip: SNS_PUBLISH_FAILURE_DIGEST_ON_BATCH_RETRY_ONLY_ONCE=0.",
+                batch_attempt or "?",
+            )
+        else:
+            log.info(
+                "Publishing SNS failure digest (%s failed table(s)).",
+                len(failed_tables),
+            )
+            flush_logging_handlers()
+            publish_load_failures(
+                failed_tables,
+                pipeline_name=runtime_cfg["pipeline_name"],
+                snapshot_date=runtime_cfg["snapshot_date"],
+                bucket_url=runtime_cfg["bucket_url"],
+                dataset_name=runtime_cfg["dataset_name"],
+            )
 
-    if full_failed > 0:
-        raise SystemExit(1)
+    # Per-table failures do not stop other tables (unless FULL_LOAD_FAIL_FAST / DELTA_LOAD_FAIL_FAST).
+    # Default: exit 0 so the batch job is "successful" while SNS (if configured) lists failed tables.
+    if full_failed > 0 or delta_failed > 0:
+        if exit_on_table_failures:
+            log.error(
+                "EXIT_ON_TABLE_FAILURES: exiting with code 1 (%s FULL failure(s), %s DELTA failure(s)).",
+                full_failed,
+                delta_failed,
+            )
+            raise SystemExit(1)
+        log.warning(
+            "Table load failures: FULL=%s DELTA=%s — exiting with code 0. "
+            "SNS failure digest already sent if SNS_FAILURE_TOPIC_ARN is set. "
+            "Set EXIT_ON_TABLE_FAILURES=1 to exit 1 for orchestration that must fail the task.",
+            full_failed,
+            delta_failed,
+        )
 
 
 if __name__ == "__main__":

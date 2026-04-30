@@ -4,9 +4,6 @@ databases:
   - name: supplier_statistics
     env_database_key: POSTGRES_DB_SUPPLIER_STATISTICS
 
-  - name: rfq_backend
-    env_database_key: POSTGRES_DB_RFQ_BACKEND
-
   - name: explore
     env_database_key: POSTGRES_DB_EXPLORE
 
@@ -21,9 +18,6 @@ databases:
 
   - name: rfq_service
     env_database_key: POSTGRES_DB_RFQ_SERVICE
-
-  - name: search_rec_backend
-    env_database_key: POSTGRES_DB_SEARCH_REC_BACKEND
 
   - name: statistics
     env_database_key: POSTGRES_DB_STATISTICS
@@ -51,9 +45,6 @@ databases:
 
   - name: connection-emails
     env_database_key: POSTGRES_DB_CONNECTION_EMAILS
-
-  - name: content-approval-rating
-    env_database_key: POSTGRES_DB_CONTENT_APPROVAL_RATING
 
   - name: business-insights
     env_database_key: POSTGRES_DB_BUSINESS_INSIGHTS

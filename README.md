@@ -67,7 +67,11 @@ Provide credentials via your normal AWS setup (environment variables, AWS profil
 
 **Optional runtime controls**
 - `DLT_PIPELINES_DIR` (default in this repo: `.dlt_work`)
-- `MAX_WORKERS_FULL` (default: `6`)
+- `MAX_WORKERS_FULL` (default: `4`)
+- `MAX_WORKERS_DELTA` (default: `4`)
+
+**Load mode**
+- `RUN_LOAD_TYPE`: `full` (default), `delta`, or `both`. With **`both`**, the process runs the **FULL phase first**, then the **DELTA phase** in the same job. Details: [`docs/load-types.md`](docs/load-types.md).
 
 **Optional run filters**
 - `RUN_DATABASE` (database alias from `config/databases.yaml`, e.g. `statistics`)
@@ -83,6 +87,8 @@ Edit `config/settings.yaml` to control:
 ### 3) Table selection
 
 Tables are listed per database alias in `config/tables/full_load/<db_alias>.yaml`.
+
+Incremental (delta) tables are configured under `config/tables/delta_load/<db_alias>.yaml`.
 
 Each file contains a `tables:` list with entries like `schema`, `table`, optional `select_sql`, `columns`, etc.
 

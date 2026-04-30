@@ -1,5 +1,0 @@
-tables:
-  - schema: public
-    table: supplier_responses_quota_tracker
-    output_table_name: rfq_backend_supplier_responses_quota_tracker
-    enabled: true

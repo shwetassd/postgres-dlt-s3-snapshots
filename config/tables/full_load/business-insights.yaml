@@ -1,26 +1,5 @@
 tables:
   - schema: public
-    table: online_products_counts_v2
-    output_table_name: online_products_counts
-    enabled: true
-    select_sql: |
-      package_name,
-      platforms,
-      company_uuid::text as company_uuid,
-      standard_limit,
-      boosted_limit,
-      standard,
-      boosted
-    output_columns:
-      - package_name
-      - platforms
-      - company_uuid
-      - standard_limit
-      - boosted_limit
-      - standard
-      - boosted
-    
-  - schema: public
     table: last_12_months
     output_table_name: last_12_months
     enabled: true
@@ -61,23 +40,6 @@ tables:
       - request
       - c2s
       - c2p
-
-  - schema: public
-    table: request_received_monthly_agg
-    output_table_name: request_received_monthly_agg
-    enabled: true
-    select_sql: |
-       date,
-       company_uuid::text as company_uuid,
-       platform,
-       rfi_received_nb,
-       rfq_received_nb
-    output_columns: 
-      - date
-      - company_uuid
-      - platform
-      - rfi_received_nb
-      - rfq_received_nb
 
   - schema: public
     table: company

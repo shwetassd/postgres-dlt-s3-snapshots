@@ -1,4 +1,9 @@
-"""Optional SNS alert when table loads fail (configure SNS_FAILURE_TOPIC_ARN)."""
+"""Optional SNS alert when table loads fail (configure SNS_FAILURE_TOPIC_ARN).
+
+Duplicate digests: AWS Batch retries re-run the process; main.py skips publishing on
+attempt > 1 unless SNS_ALWAYS_PUBLISH_FAILURE_DIGEST=1 (see env vars there).
+Separate duplicate emails can come from multiple SNS subscriptions or CloudWatch→ERROR filters.
+"""
 
 from __future__ import annotations
 

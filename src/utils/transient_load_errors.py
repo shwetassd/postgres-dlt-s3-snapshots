@@ -1,11 +1,26 @@
-"""Detect transient failures worth retrying (S3 upload / network), not logic bugs."""
+"""Retry policy: only infra/transient errors (S3, network, memory, disk); never schema/config bugs."""
 
 from __future__ import annotations
+
+import errno
 
 try:
     from botocore.exceptions import ClientError as _BotoClientError
 except ImportError:
     _BotoClientError = None
+
+# Failures that must not burn retries (YAML/schema/dlt logic — fix config instead).
+_SCHEMA_OR_LOGIC_MARKERS = (
+    "table schema does not match",
+    "schema does not match schema used to create file",
+    "extract/schema mismatch",
+    "merging arrow schema",
+    "column hints were different",
+    "undefinedcolumn",
+    "syntax error at",
+    "programmingerror",
+    "duplicate key value violates unique constraint",
+)
 
 
 def _walk_exception_chain(exc: BaseException) -> list[BaseException]:
@@ -19,8 +34,23 @@ def _walk_exception_chain(exc: BaseException) -> list[BaseException]:
     return out
 
 
+def is_schema_or_logic_failure(exc: BaseException) -> bool:
+    """True when failure should never be retried (schema, SQL, dlt contract)."""
+    for err in _walk_exception_chain(exc):
+        msg = str(err).lower()
+        if isinstance(err, ValueError) and "schema" in msg and "match" in msg:
+            return True
+        for sub in _SCHEMA_OR_LOGIC_MARKERS:
+            if sub in msg:
+                return True
+    return False
+
+
 def is_retryable_full_load_error(exc: BaseException) -> bool:
-    """True for likely-transient S3 / HTTP / network errors during extract→load."""
+    """True only for infra/transient issues worth retrying (OOM, disk, S3/network flakiness)."""
+    if is_schema_or_logic_failure(exc):
+        return False
+
     for err in _walk_exception_chain(exc):
         if _BotoClientError is not None and isinstance(err, _BotoClientError):
             code = (
@@ -42,11 +72,17 @@ def is_retryable_full_load_error(exc: BaseException) -> bool:
             return True
 
         if isinstance(err, OSError):
-            # EPIPE, ECONNRESET, ETIMEDOUT; errno 22 often used for S3 Content-Length mismatch (Linux EINVAL)
-            errno = getattr(err, "errno", None)
-            if errno in (32, 104, 110):
+            no = getattr(err, "errno", None)
+            # ENOMEM, ENOSPC, EPIPE, ECONNRESET, ETIMEDOUT (values vary by OS; 28 is ENOSPC on Linux/macOS)
+            if no in (
+                getattr(errno, "ENOMEM", 12),
+                getattr(errno, "ENOSPC", 28),
+                32,
+                104,
+                110,
+            ):
                 return True
-            if errno == 22:
+            if no == 22:
                 msg = str(err).lower()
                 if "content-length" in msg or "number of bytes" in msg:
                     return True
@@ -61,13 +97,30 @@ def is_retryable_full_load_error(exc: BaseException) -> bool:
                 "broken pipe",
                 "connection reset",
                 "reset by peer",
+                "cannot allocate memory",
+                "no space left",
                 "timed out",
                 "timeout",
                 "slowdown",
                 "throttl",
                 "please reduce your request rate",
+                # PostgreSQL / psycopg2 mid-query disconnect (RDS idle timeout, proxy, network blip)
+                "ssl syscall",
+                "eof detected",
+                "could not receive data from server",
+                "server closed the connection unexpectedly",
             )
         ):
             return True
 
+    return False
+
+
+def is_memory_or_disk_exhaustion(exc: BaseException) -> bool:
+    """OOM or ENOSPC — optional aggressive local cleanup before retry."""
+    for err in _walk_exception_chain(exc):
+        if isinstance(err, MemoryError):
+            return True
+        if isinstance(err, OSError) and getattr(err, "errno", None) == getattr(errno, "ENOSPC", 28):
+            return True
     return False

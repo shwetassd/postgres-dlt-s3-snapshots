@@ -1,21 +1,8 @@
+# Prisma-style quoted columns — cursor_expression uses PostgreSQL double-quoted identifiers.
 tables:
   - schema: public
-    table: _prisma_migrations
-    output_table_name: users_prisma_migrations
-    enabled: true
-    columns:
-      - id
-      - checksum
-      - finished_at
-      - migration_name
-      - logs
-      - rolled_back_at
-      - started_at
-      - applied_steps_count
-
-  - schema: public
-    table: "Profile"
-    output_table_name: user_backend_profile
+    table: Profile
+    output_table_name: Profile
     enabled: true
     columns:
       - createTime
@@ -38,10 +25,12 @@ tables:
       - roles
       - organisation
       - alibabaId
-    
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST("createTime", "updateTime")
+
   - schema: public
-    table: "SupplierProfile"
-    output_table_name: user_backend_supplierprofile
+    table: SupplierProfile
+    output_table_name: SupplierProfile
     enabled: true
     columns:
       - id
@@ -49,3 +38,5 @@ tables:
       - updateTime
       - profileId
       - supplierFactId
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST("createTime", "updateTime")

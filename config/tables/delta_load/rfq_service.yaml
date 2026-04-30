@@ -1,0 +1,65 @@
+tables:
+  - schema: public
+    table: rfq_core
+    output_table_name: rfq_core
+    enabled: true
+    columns:
+      - rfq_id
+      - reference_no
+      - title
+      - description
+      - delivery_location
+      - quantity
+      - supplier_types
+      - request_frequency
+      - company
+      - sender_id
+      - platform_code
+      - origin
+      - language_code
+      - created_at
+      - updated_at
+      - status
+      - version
+      - structured_data
+      - request_iteration_id
+      - converted_from_qdr
+      - category_id
+      - buyer_country
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, updated_at)
+
+  - schema: public
+    table: mail_logs
+    output_table_name: mail_logs
+    enabled: true
+    columns:
+      - id
+      - message_id
+      - mail_type
+      - platform_code
+      - recipient_email
+      - rfq_id
+      - matching_id
+      - conversation_id
+      - status
+      - created_at
+      - modified_at
+      - supplier_id
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, modified_at)
+
+  - schema: public
+    table: recommendations_notifications
+    output_table_name: recommendations_notifications
+    enabled: true
+    columns:
+      - id
+      - supplier_id
+      - rfq_id
+      - status
+      - created_at
+      - modified_at
+      - unified_supplier_id
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, modified_at)

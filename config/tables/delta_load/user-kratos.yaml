@@ -1,18 +1,7 @@
 tables:
   - schema: public
-    table: identity_credential_types
-    output_table_name: user_kratos_identity_credential_types
-    enabled: true
-    select_sql: |
-      id::text as id,
-      name
-    output_columns:
-      - id
-      - name
-
-  - schema: public
     table: sessions
-    output_table_name: user_kratos_sessions
+    output_table_name: sessions
     enabled: true
     columns:
       - id
@@ -28,10 +17,12 @@ tables:
       - logout_token
       - aal
       - authentication_methods
-    
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, updated_at)
+
   - schema: public
     table: identity_credentials
-    output_table_name: user_kratos_identity_credentials
+    output_table_name: identity_credentials
     enabled: true
     columns:
       - id
@@ -42,10 +33,12 @@ tables:
       - updated_at
       - nid
       - version
-    
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, updated_at)
+
   - schema: public
     table: identity_verifiable_addresses
-    output_table_name: user_kratos_identity_verifiable_addresses
+    output_table_name: identity_verifiable_addresses
     enabled: true
     columns:
       - id
@@ -58,10 +51,12 @@ tables:
       - created_at
       - updated_at
       - nid
-    
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, updated_at)
+
   - schema: public
     table: identity_credential_identifiers
-    output_table_name: user_kratos_identity_credential_identifiers
+    output_table_name: identity_credential_identifiers
     enabled: true
     columns:
       - id
@@ -71,10 +66,13 @@ tables:
       - updated_at
       - nid
       - identity_credential_type_id
-    
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, updated_at)
+
   - schema: public
     table: identities
-    output_table_name: user_kratos_identities
+    output_table_name: identities
+    enabled: true
     columns:
       - id
       - schema_id
@@ -88,4 +86,5 @@ tables:
       - metadata_admin
       - available_aal
       - organization_id
-    
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, updated_at)
