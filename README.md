@@ -1,135 +1,86 @@
-# postgres_dlt_s3
+# postgres-dlt-s3
 
-Extract tables from **Postgres** and write snapshots to **S3** (or any `dlt` filesystem-compatible bucket URL) using `dlt` with Parquet output.
+Loads selected **PostgreSQL** tables into **Parquet** on **S3** (or any URL `dlt` filesystem supports), using [`dlt`](https://dlthub.com/). Each run uses a **snapshot date** (today by default) in object paths.
 
-This project supports:
-- **Full load snapshots** (rebuild table snapshot for a given snapshot date)
-- **Parallel execution** across many tables
-- **Target filtering** (run a single database or table)
+**Modes**
 
-## Project layout
+- **Full load**: snapshot per output table for that date (optional replace of the table’s prefix on S3).
+- **Delta load**: cursor-based incremental extracts; state lives under `DLT_PIPELINES_DIR` (persist this on scheduled jobs or every delta behaves like a first run).
 
-- `src/main.py`: entrypoint that reads config + runs full loads
-- `config/settings.yaml`: pipeline + destination settings
-- `config/databases.yaml`: maps database aliases to env var names (actual DB names)
-- `config/tables/full_load/*.yaml`: full-load table lists per database alias
+## How it works
 
-## Prerequisites
+1. `python -m src.main` reads `config/settings.yaml`, `config/databases.yaml`, and every `config/tables/full_load/*.yaml` / `delta_load/*.yaml`.
+2. Enabled tables are scheduled into a **FULL** phase and/or a **DELTA** phase (`RUN_LOAD_TYPE`).
+3. Workers connect with SQLAlchemy/psycopg2, stream chunks (pandas), then **dlt** writes Parquet under the configured layout.
+4. Optional filters **`RUN_DATABASE`** / **`RUN_TABLE`** limit work to one alias / one source table name.
 
-- Python 3.10+ recommended
-- Network access to your Postgres instance
-- AWS credentials configured (if writing to S3)
+Database **alias** = YAML filename stem (e.g. `rfq_service` → `config/tables/full_load/rfq_service.yaml`). **`RUN_TABLE`** matches the source `table:` field inside that YAML.
+
+## Where it runs
+
+- **Locally**: repo root, venv, `.env` via `python-dotenv`.
+- **AWS Batch / ECS / CI**: same entrypoint; inject env (Postgres, bucket, `POSTGRES_DB_*`, optional SNS). Use a **persistent** `DLT_PIPELINES_DIR` (e.g. EFS) if deltas must keep cursors across tasks.
+
+## Failure notifications
+
+If **`SNS_FAILURE_TOPIC_ARN`** is set, after a run with failed tables the app publishes a **failure digest** to that SNS topic (IAM `sns:Publish` required). Optional: `SNS_PUBLISH_DELAY_SECONDS`, `SNS_ALWAYS_PUBLISH_FAILURE_DIGEST`, `SNS_PUBLISH_FAILURE_DIGEST_ON_BATCH_RETRY_ONLY_ONCE` (see `src/main.py` / `src/utils/sns_notify.py`). No topic → logs only.
 
 ## Setup (local)
 
-Create and activate a virtual environment, then install deps:
-
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Configuration
+Copy `.env` pattern from your team; required pieces below.
 
-### 1) Environment variables
+## Essential environment
 
-The same variable names must be set in the process environment: locally you can use a `.env` file via `python-dotenv` (`load_dotenv()` is called at startup). On **AWS Batch**, inject Postgres secrets from **Secrets Manager** and non-secret values (host, bucket URL, `POSTGRES_DB_*`, etc.) in the job definition environment, so no `.env` file is required in the container.
+| Area | Variables |
+|------|-----------|
+| Postgres | `PG_HOST`, `PG_PORT` (default `5432`), `PG_USER`, `PG_PASSWORD` |
+| DB names | One env per alias in `config/databases.yaml`, e.g. `POSTGRES_DB_RFQ_SERVICE`, `POSTGRES_DB_SUPPLIER_OFFERS` |
+| Destination | `DESTINATION__FILESYSTEM__BUCKET_URL` (must match `settings.yaml`) |
+| AWS (S3/SNS) | Standard credential/region setup; role or keys |
 
-**Postgres connection (required)**
-- `PG_HOST`
-- `PG_PORT` (default: `5432`)
-- `PG_USER`
-- `PG_PASSWORD`
+**Runtime**
 
-**Database name mapping (required)**
+- `RUN_LOAD_TYPE`: `full` (**default** if unset), `delta`, or `both` (full phase then delta). Details: [`docs/load-types.md`](docs/load-types.md).
+- `RUN_DATABASE`, `RUN_TABLE`: optional filters (see above).
 
-`config/databases.yaml` defines database aliases and the env var key that stores the *actual* database name.
+## Run commands (local)
 
-Example keys you may need in `.env` (depends on what’s in `config/databases.yaml`):
-- `POSTGRES_DB_SUPPLIER_STATISTICS=supplier_statistics`
-- `POSTGRES_DB_RFQ_BACKEND=rfq_backend`
-- `POSTGRES_DB_USER_KRATOS=user-kratos`
-
-**Destination bucket (required)**
-
-`config/settings.yaml` points at `DESTINATION__FILESYSTEM__BUCKET_URL`, so you must set:
-- `DESTINATION__FILESYSTEM__BUCKET_URL` (example: `s3://my-bucket-name`)
-
-**AWS credentials (required for S3)**
-
-Provide credentials via your normal AWS setup (environment variables, AWS profile, or IAM role). Common env vars:
-- `AWS_ACCESS_KEY_ID`
-- `AWS_SECRET_ACCESS_KEY`
-- `AWS_SESSION_TOKEN` (if using temporary creds)
-- `AWS_DEFAULT_REGION` (or `AWS_REGION`)
-
-**Optional runtime controls**
-- `DLT_PIPELINES_DIR` (default in this repo: `.dlt_work`)
-- `MAX_WORKERS_FULL` (default: `4`)
-- `MAX_WORKERS_DELTA` (default: `4`)
-
-**Load mode**
-- `RUN_LOAD_TYPE`: `full` (default), `delta`, or `both`. With **`both`**, the process runs the **FULL phase first**, then the **DELTA phase** in the same job. Details: [`docs/load-types.md`](docs/load-types.md).
-
-**Optional run filters**
-- `RUN_DATABASE` (database alias from `config/databases.yaml`, e.g. `statistics`)
-- `RUN_TABLE` (table name only, e.g. `orders`)
-
-### 2) YAML settings
-
-Edit `config/settings.yaml` to control:
-- **Snapshot date**: currently `snapshot.mode: current_date` and `snapshot.date_format: "%Y/%m/%d"`
-- **Layout**: `destination.full_load_layout`
-- **Delete existing snapshot**: `snapshot.delete_existing_full_load_snapshot`
-
-### 3) Table selection
-
-Tables are listed per database alias in `config/tables/full_load/<db_alias>.yaml`.
-
-Incremental (delta) tables are configured under `config/tables/delta_load/<db_alias>.yaml`.
-
-Each file contains a `tables:` list with entries like `schema`, `table`, optional `select_sql`, `columns`, etc.
-
-## Run
-
-Run from the repo root.
-
-### Run using your `.env` file
+From repo root:
 
 ```bash
-source .venv/bin/activate
+# All enabled full-load tables (default mode)
 python -m src.main
+
+# Full + delta in one process
+RUN_LOAD_TYPE=both python -m src.main
+
+# Only delta tables
+RUN_LOAD_TYPE=delta python -m src.main
+
+# One database alias (all its tables in scope for that mode)
+RUN_DATABASE=rfq_service python -m src.main
+
+# One source table (optionally pin database)
+RUN_TABLE=recommended_supplier python -m src.main
+RUN_DATABASE=rfq_service RUN_TABLE=recommended_supplier python -m src.main
 ```
 
-### Run a single database alias
+## Configuration layout
 
-```bash
-RUN_DATABASE=statistics python -m src.main
-```
+| Path | Role |
+|------|------|
+| `config/settings.yaml` | Pipeline name, dataset, S3 layouts, snapshot date mode, extract defaults |
+| `config/databases.yaml` | Alias → env key for real Postgres database name |
+| `config/tables/full_load/<alias>.yaml` | Full-load table definitions |
+| `config/tables/delta_load/<alias>.yaml` | Delta tables (`cursor_column`, etc.) |
 
-### Run a single table (optionally scoped by database)
+## Output layout
 
-```bash
-RUN_TABLE=some_table_name python -m src.main
-```
+Parquet paths follow `destination.full_load_layout` / `delta_load_layout` in `settings.yaml` (placeholders include `table_name`, `snapshot_date`, `load_id`, …). Full loads can delete that table’s snapshot prefix for the date when enabled in settings.
 
-### Combine filters
-
-```bash
-RUN_DATABASE=statistics RUN_TABLE=some_table_name python -m src.main
-```
-
-## Output
-
-By default, snapshots are written to the bucket URL under `full_load/<table_name>/<snapshot_date>/...`.
-
-The exact object key layout is controlled by `config/settings.yaml` (`destination.full_load_layout`).
-
-## Notes / troubleshooting
-
-- Never commit real credentials in `.env`. Prefer keeping `.env` local-only and (optionally) maintaining a sanitized `.env.example` for documentation.
-- If you see errors about missing DB env vars, ensure the env var referenced by `config/databases.yaml` is set (e.g. `POSTGRES_DB_*`).
-- If S3 writes fail, verify AWS credentials and that `DESTINATION__FILESYSTEM__BUCKET_URL` points to a bucket you can write to.
-- If imports fail, make sure you’re running from the repo root and using `python -m src.main`.
+Do not commit secrets; keep `.env` local.

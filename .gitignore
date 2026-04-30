@@ -3,3 +3,5 @@ __pycache__/
 *.pyc
 .env
 .dlt/
+.DS_Store
+.dlt_work/

@@ -150,10 +150,7 @@ tables:
     table: recommended_supplier
     output_table_name: recommended_supplier
     enabled: true
-    # DDL: supplier_types/products/keywords/product_categories are PostgreSQL text[] → export as JSON array
-    # text via array_to_json (not json/jsonb types). raw_recommendation_json is jsonb → ::text is JSON text.
-    # Row weight is dominated by jsonb size × chunk rows (not a pandas “bug”). Smaller chunks reduce peak RAM.
-    extract_chunk_size: 15000
+    extract_chunk_size: 28000
     select_sql: |
       id,
       rfq_id::text as rfq_id,
