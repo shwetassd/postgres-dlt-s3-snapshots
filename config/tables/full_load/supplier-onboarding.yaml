@@ -3,6 +3,7 @@ tables:
     table: report_published_drafts
     output_table_name: report_published_drafts
     enabled: true
+    select_sql: |
     columns:
       - import_task_id
       - draft_id
@@ -10,6 +11,55 @@ tables:
       - published_at
       - created_at
 
+  - schema: public
+    table: report_product_filling_score
+    output_table_name: report_product_filling_score
+    enabled: true
+    select_sql: |
+      id,
+      supplier_offer_id::text as supplier_offer_id,
+      supplier_facts_id::text as supplier_facts_id,
+      category_score,
+      description_score,
+      image_score,
+      keyword_score,
+      moq_score,
+      name_score,
+      price_score,
+      property_score,
+      total_score,
+      adjusted_total_score,
+      master_language,
+      updated_at,
+      updated_by::text as updated_by,
+      offer_status,
+      record_created_at,
+      record_updated_at,
+      "snapshot"::text as snapshot,
+      COALESCE(platform::text, '') as platform
+    output_columns:
+      - id
+      - supplier_offer_id
+      - supplier_facts_id
+      - category_score
+      - description_score
+      - image_score
+      - keyword_score
+      - moq_score
+      - name_score
+      - price_score
+      - property_score
+      - total_score
+      - adjusted_total_score
+      - master_language
+      - updated_at
+      - updated_by
+      - offer_status
+      - record_created_at
+      - record_updated_at
+      - snapshot
+      - platform
+      
   - schema: public
     table: offers
     output_table_name: supplier_onboarding_offers

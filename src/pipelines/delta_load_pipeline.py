@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import date, datetime
 
 import dlt
 from dlt.destinations import filesystem
@@ -16,6 +16,38 @@ log = logging.getLogger(__name__)
 
 def quote_ident(value: str) -> str:
     return '"' + value.replace('"', '""') + '"'
+
+
+def _coerce_dlt_incremental_initial_value(value):
+    """Match dlt/PyArrow cursor dtype (e.g. timestamp[us]): strings like ISO dates must be datetime, not str."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return int(value) if isinstance(value, float) and value == int(value) else value
+    if isinstance(value, str):
+        s = value.strip()
+        if not s:
+            return None
+        if s.isdigit() or (s.startswith("-") and s[1:].isdigit()):
+            return int(s)
+        iso = s[:-1] + "+00:00" if s.endswith("Z") else s
+        try:
+            return datetime.fromisoformat(iso)
+        except ValueError:
+            pass
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M:%S.%f"):
+            try:
+                return datetime.strptime(s, fmt)
+            except ValueError:
+                continue
+        return value
+    return value
 
 
 def _format_watermark_for_log(value) -> tuple[str, str]:
@@ -50,11 +82,65 @@ def _delta_watermark_log_message(cursor_column: str, last_v) -> str:
 
 
 def _watermark_summary_line(cursor_column: str, last_v) -> str:
-    """One-line INFO summary; full text stays in log.debug via _delta_watermark_log_message."""
+    """Fallback one-line INFO when min/max query failed; details in log.debug."""
     if last_v is None:
-        return f"cursor={cursor_column}  baseline=none (full extract)"
+        return f"full_table (no saved cursor; column {cursor_column})"
     human, _ = _format_watermark_for_log(last_v)
-    return f"cursor={cursor_column}  incremental  after={human}"
+    return f"incremental (column {cursor_column}; load rows newer than {human})"
+
+
+def _format_cursor_value_for_log(value) -> str:
+    if value is None:
+        return "n/a"
+    try:
+        if hasattr(value, "isoformat"):
+            return value.isoformat()
+    except Exception:
+        pass
+    return str(value)
+
+
+def _cursor_min_max_statement(projected_base: str, cursor_sql_ref: str, cursor_column: str, last_v):
+    """Aggregate MIN/MAX of cursor over the same rowset as the delta extract (one DB round-trip)."""
+    col = quote_ident(cursor_column)
+    inner = projected_base
+    if last_v is not None:
+        inner = f"{projected_base} WHERE {cursor_sql_ref} > :lv"
+    sql = f"SELECT MIN(_dlt_b.{col}), MAX(_dlt_b.{col}) FROM ({inner}) AS _dlt_b"
+    stmt = text(sql)
+    if last_v is not None:
+        stmt = stmt.bindparams(lv=last_v)
+    return stmt
+
+
+def _compact_delta_extract_description(cursor_column: str, last_v, lo, hi) -> str:
+    """Single INFO line. lo/hi are MIN/MAX of cursor_column (e.g. GREATEST(created_at,updated_at)), not MIN(created_at)."""
+    if lo is None and hi is None:
+        if last_v is None:
+            return (
+                f"full_table column={cursor_column} "
+                "no_rows_or_null_watermarks_in_aggregate"
+            )
+        cutoff, _ = _format_watermark_for_log(last_v)
+        return (
+            f"incremental column={cursor_column} "
+            f"cutoff_exclusive={cutoff} matched_rows=0"
+        )
+
+    lo_s = _format_cursor_value_for_log(lo)
+    hi_s = _format_cursor_value_for_log(hi)
+    if last_v is None:
+        return (
+            f"full_table column={cursor_column} "
+            f"loading_all_rows dlt_cursor_min={lo_s} dlt_cursor_max={hi_s}"
+        )
+
+    cutoff, _ = _format_watermark_for_log(last_v)
+    return (
+        f"incremental column={cursor_column} "
+        f"cutoff_exclusive={cutoff} "
+        f"dlt_cursor_min={lo_s} dlt_cursor_max={hi_s}"
+    )
 
 
 def run_delta_snapshot(
@@ -101,9 +187,10 @@ def run_delta_snapshot(
         dataset_name=dataset_name,
     )
 
+    coerced_initial = _coerce_dlt_incremental_initial_value(initial_value)
     incr_kw: dict = dict(row_order="asc", range_start="open")
-    if initial_value is not None:
-        incr_kw["initial_value"] = initial_value
+    if coerced_initial is not None:
+        incr_kw["initial_value"] = coerced_initial
     incremental_conf = dlt.sources.incremental(cursor_column, **incr_kw)
 
     # cursor_expression is applied in the SQL projection below. YAML may omit select_sql and list
@@ -146,11 +233,36 @@ def run_delta_snapshot(
         @dlt.resource(name=table_name, write_disposition="append")
         def projected_delta_rows(incr_bind=incremental_conf):
             last_v = incr_bind.last_value
+            bounds_stmt = _cursor_min_max_statement(
+                projected_base, cursor_sql_ref, cursor_column, last_v
+            )
+            bounds_lo = bounds_hi = None
+            bounds_ok = False
+            try:
+                with engine.connect() as conn:
+                    row = conn.execute(bounds_stmt).one()
+                    bounds_lo, bounds_hi = row[0], row[1]
+                    bounds_ok = True
+            except Exception as e:
+                log.warning(
+                    "delta  extract  %s.%s  table_watermark_min_max_query_failed  error=%s",
+                    schema_name,
+                    source_table_name,
+                    e,
+                )
+
+            extract_desc = (
+                _compact_delta_extract_description(
+                    cursor_column, last_v, bounds_lo, bounds_hi
+                )
+                if bounds_ok
+                else _watermark_summary_line(cursor_column, last_v)
+            )
             log.info(
                 "delta  extract  %s.%s  %s",
                 schema_name,
                 source_table_name,
-                _watermark_summary_line(cursor_column, last_v),
+                extract_desc,
             )
             log.debug(
                 "%s — pipeline=%s table=%s",
@@ -158,6 +270,7 @@ def run_delta_snapshot(
                 pipeline_name,
                 table_name,
             )
+
             if last_v is None:
                 projected_query = text(projected_base + order_clause)
             else:
@@ -262,7 +375,7 @@ def run_delta_snapshot(
 
     sql_wm = getattr(incremental_conf, "last_value", None)
     log.info(
-        "delta  sql_table  %s.%s  %s",
+        "delta  sql_table  %s.%s  %s  (no_table_watermark_span_on_this_path)",
         schema_name,
         source_table_name,
         _watermark_summary_line(cursor_column, sql_wm),

@@ -1,5 +1,3 @@
-# Each `name` matches the stem of `config/tables/full_load/<name>.yaml` and/or `delta_load/<name>.yaml`.
-# Each `env_database_key` must be set in the environment (e.g. `.env`) to the actual Postgres database name.
 databases:
   - name: supplier_statistics
     env_database_key: POSTGRES_DB_SUPPLIER_STATISTICS

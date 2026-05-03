@@ -48,8 +48,17 @@ def flush_logging_handlers() -> None:
 
 
 def configure_logging() -> logging.Logger:
-    """Configure root logging once; respects LOG_LEVEL (default INFO)."""
-    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    """Configure root logging once; LOG_LEVEL env overrides ``runtime.log_level`` in settings.yaml."""
+    level_name = os.getenv("LOG_LEVEL", "").strip()
+    if not level_name:
+        try:
+            from src.config_loader.loader import load_settings
+
+            rt = load_settings().get("runtime") or {}
+            level_name = str(rt.get("log_level") or "INFO").strip()
+        except Exception:
+            level_name = "INFO"
+    level_name = level_name.upper()
     level = getattr(logging, level_name, logging.INFO)
 
     root = logging.getLogger()

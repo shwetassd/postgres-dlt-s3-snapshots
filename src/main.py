@@ -5,7 +5,6 @@ import time
 from datetime import datetime
 from concurrent.futures import CancelledError, ThreadPoolExecutor, as_completed
 from pathlib import Path
-from dotenv import load_dotenv
 
 from src.config_loader.loader import (
     load_database_config,
@@ -16,7 +15,12 @@ from src.config_loader.loader import (
 from src.pipelines.delta_load_pipeline import run_delta_snapshot
 from src.pipelines.full_load_pipeline import run_full_snapshot
 from src.sources.postgres import get_engine
-from src.utils.runtime_config import get_bucket_url, get_snapshot_date
+from src.utils.runtime_config import (
+    get_bucket_url,
+    get_delta_initial_cursor_value,
+    get_snapshot_date,
+)
+from src.utils.settings_resolver import build_operational_runtime
 from src.utils.s3_cleanup import delete_table_snapshot_prefix
 from src.utils.pipeline_names import build_pipeline_name
 from src.utils.dlt_runtime import get_pipelines_dir
@@ -28,16 +32,18 @@ from src.utils.logging_config import (
     silence_common_warnings,
 )
 from src.utils.dlt_project import ensure_dlt_config_from_repo
+from src.utils.dotenv_policy import load_dotenv_optional
 from src.utils.sns_notify import publish_load_failures
 from src.utils.run_summary_format import build_run_summary_box
+from src.utils.run_summary_s3 import maybe_upload_run_summary_json
 from src.utils.transient_load_errors import (
     is_memory_or_disk_exhaustion,
     is_retryable_full_load_error,
 )
 from src.utils.workdir_cleanup import clear_pipeline_workdir
 
-# Batch/ECS env must win over any .env baked into the image (override=False is the default).
-load_dotenv(override=False)
+# Containers: set SKIP_DOTENV=1 (Dockerfile) so only injected env / secrets apply.
+load_dotenv_optional()
 silence_common_warnings()
 log = configure_logging()
 ensure_dlt_config_from_repo()
@@ -117,7 +123,7 @@ def get_output_table_name(table_cfg) -> str:
 def _cleanup_before_full_load_retry(exc: BaseException, runtime_cfg: dict) -> None:
     """ gc.collect() always; optional wipe of DLT pipeline workdir on OOM/ENOSPC (see env). """
     gc.collect()
-    if os.getenv("FULL_LOAD_RETRY_CLEAR_PIPELINE_WORKDIR", "").lower() not in ("1", "true", "yes"):
+    if not runtime_cfg.get("full_load_retry_clear_pipeline_workdir", False):
         return
     if not is_memory_or_disk_exhaustion(exc):
         return
@@ -208,14 +214,10 @@ def run_one_full_table(table_cfg, configured_databases, runtime_cfg, engine_cach
     actual_db = resolve_database_name(configured_databases, table_cfg.database)
     engine = get_engine_cached(engine_cache, engine_cache_lock, actual_db)
 
-    # Default 1: schema/SQL mistakes fail once; raise FULL_LOAD_MAX_ATTEMPTS for S3/network retries only.
-    max_attempts = max(1, int(os.getenv("FULL_LOAD_MAX_ATTEMPTS", "1")))
-    base_retry_delay = max(0.0, float(os.getenv("FULL_LOAD_RETRY_DELAY_SECONDS", "20")))
-    skip_snapshot_delete = os.getenv("SKIP_DELETE_EXISTING_SNAPSHOT", "").lower() in (
-        "1",
-        "true",
-        "yes",
-    )
+    # Default 1: schema/SQL mistakes fail once; raise max_attempts for S3/network retries only.
+    max_attempts = max(1, int(runtime_cfg["full_load_max_attempts"]))
+    base_retry_delay = max(0.0, float(runtime_cfg["full_load_retry_delay_seconds"]))
+    skip_snapshot_delete = bool(runtime_cfg["skip_delete_existing_snapshot"])
 
     load_info = None
     norm_counts = None
@@ -325,14 +327,8 @@ def run_one_delta_table(table_cfg, configured_databases, runtime_cfg, engine_cac
     actual_db = resolve_database_name(configured_databases, table_cfg.database)
     engine = get_engine_cached(engine_cache, engine_cache_lock, actual_db)
 
-    max_attempts = max(
-        1,
-        int(os.getenv("DELTA_LOAD_MAX_ATTEMPTS", os.getenv("FULL_LOAD_MAX_ATTEMPTS", "1"))),
-    )
-    base_retry_delay = max(
-        0.0,
-        float(os.getenv("DELTA_LOAD_RETRY_DELAY_SECONDS", os.getenv("FULL_LOAD_RETRY_DELAY_SECONDS", "20"))),
-    )
+    max_attempts = max(1, int(runtime_cfg["delta_load_max_attempts"]))
+    base_retry_delay = max(0.0, float(runtime_cfg["delta_load_retry_delay_seconds"]))
 
     load_info = None
     norm_counts = None
@@ -368,7 +364,11 @@ def run_one_delta_table(table_cfg, configured_databases, runtime_cfg, engine_cac
                     else runtime_cfg["extract_chunk_size"]
                 ),
                 extract_backend=runtime_cfg["extract_backend"],
-                initial_value=table_cfg.initial_value,
+                initial_value=(
+                    table_cfg.initial_value
+                    if table_cfg.initial_value is not None
+                    else runtime_cfg.get("delta_initial_cursor_value")
+                ),
                 cursor_expression=table_cfg.cursor_expression,
             )
             break
@@ -403,9 +403,15 @@ def run_one_delta_table(table_cfg, configured_databases, runtime_cfg, engine_cac
     )
 
 
-def _phase_watchdog(phase_name: str, future_to_cfg: dict, stop: threading.Event) -> None:
+def _phase_watchdog(
+    phase_name: str,
+    future_to_cfg: dict,
+    stop: threading.Event,
+    *,
+    interval_sec: int,
+) -> None:
     """Ping logs while table tasks run — lists which tables are still in flight."""
-    interval = int(os.getenv("PHASE_WATCHDOG_INTERVAL_SEC", "180"))
+    interval = int(interval_sec)
     if interval <= 0:
         return
     total = len(future_to_cfg)
@@ -446,12 +452,8 @@ def run_phase(
     rows_total = 0
     skipped_fail_fast = 0
     fail_fast = (
-        phase_name == "FULL"
-        and os.getenv("FULL_LOAD_FAIL_FAST", "").lower() in ("1", "true", "yes")
-    ) or (
-        phase_name == "DELTA"
-        and os.getenv("DELTA_LOAD_FAIL_FAST", "").lower() in ("1", "true", "yes")
-    )
+        phase_name == "FULL" and bool(runtime_cfg["full_load_fail_fast"])
+    ) or (phase_name == "DELTA" and bool(runtime_cfg["delta_load_fail_fast"]))
     fail_fast_cancel_done = False
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -470,7 +472,7 @@ def run_phase(
             ff_note,
         )
         if phase_name == "FULL" and runtime_cfg.get("delete_existing_full_load_snapshot"):
-            if os.getenv("SKIP_DELETE_EXISTING_SNAPSHOT", "").lower() in ("1", "true", "yes"):
+            if runtime_cfg.get("skip_delete_existing_snapshot"):
                 log.info(
                     "FULL: snapshot_date=%s — not deleting existing S3 objects (SKIP_DELETE_EXISTING_SNAPSHOT)",
                     runtime_cfg["snapshot_date"],
@@ -492,6 +494,7 @@ def run_phase(
         watchdog = threading.Thread(
             target=_phase_watchdog,
             args=(phase_name, future_to_cfg, stop_watchdog),
+            kwargs={"interval_sec": int(runtime_cfg["phase_watchdog_interval_sec"])},
             daemon=True,
             name=f"{phase_name}-watchdog",
         )
@@ -604,10 +607,11 @@ def main() -> None:
     settings = load_settings()
     databases_config = load_database_config()
 
-    # Distinguish unset vs empty: unset → full; empty string → invalid below.
+    # Unset → both (full phase then delta). Set RUN_LOAD_TYPE to full or delta to run only that phase.
+    # Empty or whitespace-only → invalid below.
     _raw_run_load_type = os.environ.get("RUN_LOAD_TYPE")
     if _raw_run_load_type is None:
-        run_load_type = "full"
+        run_load_type = "both"
     else:
         run_load_type = _raw_run_load_type.strip().lower()
     log.debug(
@@ -676,7 +680,7 @@ def main() -> None:
         "dataset_name": settings["pipeline"]["dataset_name"],
         "bucket_url": get_bucket_url(settings),
         "snapshot_date": get_snapshot_date(settings),
-        "pipelines_dir": get_pipelines_dir(),
+        "pipelines_dir": get_pipelines_dir(settings),
         "full_load_layout": settings["destination"]["full_load_layout"],
         "full_load_delete_prefix_template": settings["destination"]["full_load_delete_prefix_template"],
         "delta_load_layout": settings["destination"].get(
@@ -685,19 +689,14 @@ def main() -> None:
         ),
         "file_format": settings["destination"]["file_format"],
         "delete_existing_full_load_snapshot": settings["snapshot"]["delete_existing_full_load_snapshot"],
-        "extract_chunk_size": int(
-            os.getenv(
-                "EXTRACT_CHUNK_SIZE",
-                str(settings.get("extract", {}).get("chunk_size", 100000)),
-            )
-        ),
-        "extract_backend": str(settings.get("extract", {}).get("backend", "pyarrow")),
+        "delta_initial_cursor_value": get_delta_initial_cursor_value(settings),
         # Each output table's S3 prefix is cleared at most once per job (replace prior run; avoid double-delete).
         "full_load_cleared_prefix_keys": set(),
         "full_load_delete_lock": threading.Lock(),
     }
+    runtime_cfg.update(build_operational_runtime(settings))
 
-    if os.getenv("PIPELINE_CLEAR_WORKDIR_BEFORE_RUN", "").lower() in ("1", "true", "yes"):
+    if runtime_cfg.get("pipeline_clear_workdir_before_run"):
         clear_pipeline_workdir(runtime_cfg["pipelines_dir"], logger=log)
         if n_delta > 0:
             log.warning(
@@ -708,8 +707,8 @@ def main() -> None:
 
     # Default 4: many parallel dlt→S3 uploads (per table) can hit connection / Content-Length issues
     # at high MAX_WORKERS_FULL; override in env if the job is small or S3 is very quiet.
-    max_full = int(os.getenv("MAX_WORKERS_FULL", "4"))
-    max_delta = int(os.getenv("MAX_WORKERS_DELTA", "4"))
+    max_full = int(runtime_cfg["max_workers_full"])
+    max_delta = int(runtime_cfg["max_workers_delta"])
     if n_full >= 50 and max_full > 6:
         log.info(
             "Many tables (%s) with MAX_WORKERS_FULL=%s — if S3 upload errors persist, try 3–4.",
@@ -735,7 +734,7 @@ def main() -> None:
     delta_skipped_fail_fast = 0
     failed_tables: list[str] = []
 
-    serial_full_by_db = os.getenv("FULL_LOAD_DATABASE_SERIAL", "").lower() in ("1", "true", "yes")
+    serial_full_by_db = bool(runtime_cfg["full_load_database_serial"])
     if run_load_type in ("full", "both") and n_full > 0:
         if serial_full_by_db:
             batches = _group_full_tables_by_database(full_tables)
@@ -787,25 +786,13 @@ def main() -> None:
             full_skipped_fail_fast += skip_ff
             failed_tables.extend(errs)
 
-    skip_delta_phase = (
-        run_load_type == "both"
-        and n_delta > 0
-        and full_failed > 0
-        and os.getenv("SKIP_DELTA_WHEN_FULL_FAILS", "").lower() in ("1", "true", "yes")
-    )
-    if skip_delta_phase:
-        log.warning(
-            "SKIP_DELTA_WHEN_FULL_FAILS: FULL had %s failure(s) — skipping DELTA phase this run.",
-            full_failed,
-        )
-    elif run_load_type == "both" and n_delta > 0 and full_failed > 0:
-        log.warning(
-            "FULL had %s failure(s); DELTA phase still runs. "
-            "Set SKIP_DELTA_WHEN_FULL_FAILS=1 to skip DELTA after FULL failures.",
+    if run_load_type == "both" and n_delta > 0 and full_failed > 0:
+        log.info(
+            "FULL had %s failure(s); DELTA phase still runs (both phases always run in this mode).",
             full_failed,
         )
 
-    if run_load_type in ("delta", "both") and n_delta > 0 and not skip_delta_phase:
+    if run_load_type in ("delta", "both") and n_delta > 0:
         s, f, errs, rsum, skip_ff = run_phase(
             "DELTA",
             delta_tables,
@@ -825,11 +812,7 @@ def main() -> None:
 
     total_time = int((datetime.now() - overall_start).total_seconds())
 
-    exit_on_table_failures = os.getenv("EXIT_ON_TABLE_FAILURES", "").lower() in (
-        "1",
-        "true",
-        "yes",
-    )
+    exit_on_table_failures = bool(runtime_cfg["exit_on_table_failures"])
     reported_exit_code = (
         1
         if (full_failed > 0 or delta_failed > 0) and exit_on_table_failures
@@ -856,6 +839,44 @@ def main() -> None:
         skipped_fail_fast=full_skipped_fail_fast + delta_skipped_fail_fast,
         reported_exit_code=reported_exit_code,
     )
+    if runtime_cfg.get("run_summary_s3_upload"):
+        summary_payload = {
+            "pipeline_name": runtime_cfg["pipeline_name"],
+            "dataset_name": runtime_cfg["dataset_name"],
+            "snapshot_date": runtime_cfg["snapshot_date"],
+            "bucket_url": runtime_cfg["bucket_url"],
+            "run_load_type": run_load_type,
+            "duration_sec": total_time,
+            "run_database": run_database,
+            "run_table": run_table,
+            "full": {
+                "table_count": n_full,
+                "success": full_success,
+                "failed": full_failed,
+                "rows": full_rows,
+            },
+            "delta": {
+                "table_count": n_delta,
+                "success": delta_success,
+                "failed": delta_failed,
+                "rows": delta_rows,
+            },
+            "skipped_fail_fast": full_skipped_fail_fast + delta_skipped_fail_fast,
+            "reported_exit_code": reported_exit_code,
+            "failed_tables": failed_tables,
+            "aws_batch_job_id": os.getenv("AWS_BATCH_JOB_ID"),
+            "aws_batch_job_attempt": os.getenv("AWS_BATCH_JOB_ATTEMPT"),
+        }
+        try:
+            maybe_upload_run_summary_json(
+                bucket_url=runtime_cfg["bucket_url"],
+                dataset_name=runtime_cfg["dataset_name"],
+                snapshot_date=runtime_cfg["snapshot_date"],
+                payload=summary_payload,
+            )
+        except Exception:
+            log.warning("RUN_SUMMARY_S3_UPLOAD: failed to write JSON summary (job continues)", exc_info=True)
+
     flush_logging_handlers()
 
     if failed_tables:
@@ -864,7 +885,7 @@ def main() -> None:
         for entry in failed_tables:
             log.error("  - %s", entry)
         flush_logging_handlers()
-        delay_sec = int(os.getenv("SNS_PUBLISH_DELAY_SECONDS", "0").strip() or "0")
+        delay_sec = int(runtime_cfg["sns_publish_delay_seconds"])
         if delay_sec > 0:
             log.info(
                 "SNS_PUBLISH_DELAY_SECONDS=%s — pausing so CloudWatch can ingest RUN SUMMARY before SNS",
@@ -874,17 +895,12 @@ def main() -> None:
             flush_logging_handlers()
         batch_attempt = (os.getenv("AWS_BATCH_JOB_ATTEMPT") or "").strip()
         attempt_no = int(batch_attempt) if batch_attempt.isdigit() else 1
-        force_digest = os.getenv("SNS_ALWAYS_PUBLISH_FAILURE_DIGEST", "").lower() in (
-            "1",
-            "true",
-            "yes",
-        )
+        force_digest = bool(runtime_cfg["sns_always_publish_failure_digest"])
         # Batch re-runs the container on failure — each run would publish again unless we skip repeats.
         skip_duplicate_retry = (
             attempt_no > 1
             and not force_digest
-            and os.getenv("SNS_PUBLISH_FAILURE_DIGEST_ON_BATCH_RETRY_ONLY_ONCE", "1").lower()
-            not in ("0", "false", "no")
+            and bool(runtime_cfg.get("sns_skip_digest_on_batch_retry", True))
         )
         if skip_duplicate_retry:
             log.info(

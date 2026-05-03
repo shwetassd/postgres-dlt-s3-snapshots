@@ -3,7 +3,21 @@ tables:
     table: companies
     output_table_name: companies
     enabled: true
-    columns:
+    select_sql: |
+      customer_id,
+      is_customer,
+      COALESCE("name", '') AS name,
+      employee_count_code,
+      created_at,
+      updated_at,
+      COALESCE(company_categories::text, '') AS company_categories,
+      COALESCE(site_code, '') AS site_code,
+      COALESCE(array_to_json(booked_site_codes)::text, '[]') AS booked_site_codes,
+      COALESCE(platforms::text, '') AS platforms,
+      wlw_id,
+      COALESCE(ep_id, '') AS ep_id,
+      COALESCE("uuid"::text, '') AS uuid
+    output_columns:
       - customer_id
       - is_customer
       - name
@@ -17,5 +31,6 @@ tables:
       - wlw_id
       - ep_id
       - uuid
+      - dlt_cursor
     cursor_column: dlt_cursor
     cursor_expression: GREATEST(created_at, updated_at)

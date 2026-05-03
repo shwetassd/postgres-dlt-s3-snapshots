@@ -3,7 +3,30 @@ tables:
     table: rfq_core
     output_table_name: rfq_core
     enabled: true
-    columns:
+    select_sql: |
+      rfq_id::text AS rfq_id,
+      reference_no,
+      title,
+      description,
+      delivery_location,
+      quantity,
+      COALESCE(array_to_json(supplier_types)::text, '[]') AS supplier_types,
+      request_frequency,
+      company,
+      sender_id,
+      platform_code,
+      origin,
+      language_code,
+      created_at,
+      updated_at,
+      status,
+      COALESCE("version", '') AS version,
+      COALESCE(structured_data::text, '') AS structured_data,
+      request_iteration_id::text AS request_iteration_id,
+      converted_from_qdr,
+      category_id,
+      buyer_country
+    output_columns:
       - rfq_id
       - reference_no
       - title
@@ -26,12 +49,13 @@ tables:
       - converted_from_qdr
       - category_id
       - buyer_country
+      - dlt_cursor
     cursor_column: dlt_cursor
     cursor_expression: GREATEST(created_at, updated_at)
 
   - schema: public
     table: mail_logs
-    output_table_name: mail_logs
+    output_table_name: rfq_mail_logs
     enabled: true
     columns:
       - id

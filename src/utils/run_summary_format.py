@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import textwrap
 
 
@@ -43,19 +42,12 @@ def build_run_summary_box(
     reported_exit_code: int | None = None,
 ) -> str:
     ok = full_failed == 0 and delta_failed == 0
-    max_attempts = max(1, int(os.getenv("FULL_LOAD_MAX_ATTEMPTS", "1")))
-    delta_attempts = max(
-        1,
-        int(os.getenv("DELTA_LOAD_MAX_ATTEMPTS", os.getenv("FULL_LOAD_MAX_ATTEMPTS", "1"))),
-    )
-    retry_delay = os.getenv("FULL_LOAD_RETRY_DELAY_SECONDS", "20")
-    skip_delete = os.getenv("SKIP_DELETE_EXISTING_SNAPSHOT", "").lower() in (
-        "1",
-        "true",
-        "yes",
-    )
-    ff = os.getenv("FULL_LOAD_FAIL_FAST", "").lower() in ("1", "true", "yes")
-    dff = os.getenv("DELTA_LOAD_FAIL_FAST", "").lower() in ("1", "true", "yes")
+    max_attempts = max(1, int(runtime_cfg.get("full_load_max_attempts", 1)))
+    delta_attempts = max(1, int(runtime_cfg.get("delta_load_max_attempts", 1)))
+    retry_delay = str(runtime_cfg.get("full_load_retry_delay_seconds", 20))
+    skip_delete = bool(runtime_cfg.get("skip_delete_existing_snapshot", False))
+    ff = bool(runtime_cfg.get("full_load_fail_fast", False))
+    dff = bool(runtime_cfg.get("delta_load_fail_fast", False))
 
     if reported_exit_code is not None:
         exit_code = str(reported_exit_code)

@@ -12,6 +12,15 @@ tables:
       web_push_subscription -> 'keys' ->> 'auth' AS auth,
       web_push_subscription -> 'keys' ->> 'p256dh' AS p256dh,
       message_notifications_enabled
+    output_columns:
+      - profile_id
+      - supplier_notifications_enabled
+      - created_at
+      - updated_at
+      - endpoint
+      - auth
+      - p256dh
+      - message_notifications_enabled
 
   - schema: public
     table: notifications
@@ -30,3 +39,16 @@ tables:
       REGEXP_REPLACE(TRIM(payload ->> 'message'), '\s+', ' ', 'g') AS message,
       REGEXP_REPLACE(TRIM(payload ->> 'conversation_id'), '\s+', ' ', 'g') AS conversation_id,
       channels
+    output_columns:
+      - id
+      - profile_id
+      - kind
+      - title
+      - unread
+      - count
+      - created_at
+      - updated_at
+      - sender
+      - message
+      - conversation_id
+      - channels

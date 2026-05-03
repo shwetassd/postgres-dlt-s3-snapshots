@@ -3,6 +3,8 @@ pipeline:
   dataset_name: ext_postgres
 
 destination:
+  # AWS Batch: inject via secrets → DESTINATION__FILESYSTEM__BUCKET_URL, or bake non-secret root here:
+  # bucket_url: s3://your-bucket/your-prefix
   bucket_url_env: DESTINATION__FILESYSTEM__BUCKET_URL
   full_load_layout: "full_load/{table_name}/{snapshot_date}/{load_id}.{file_id}.{ext}"
   full_load_delete_prefix_template: "full_load/{table_name}/{snapshot_date}"
@@ -10,12 +12,6 @@ destination:
   delta_load_layout: "delta_load/{table_name}/{snapshot_date}/{load_id}.{file_id}.{ext}"
   file_format: parquet
 
-# Extraction tuning (speed vs memory / DB load)
-# - Higher chunk_size → fewer SQL round trips (faster extract), more RAM per chunk. Set EXTRACT_CHUNK_SIZE
-#   in Batch (e.g. 150000–200000 for narrow tables) if memory allows; lower if OOM.
-# - backend `pandas`: safest with mixed PG types (sql_database path). `pyarrow` can be faster for plain tables
-#   but may hit unsupported Arrow extension types — override with env EXTRACT_BACKEND=pyarrow per deployment test.
-# - Very heavy tables: set per-table extract_chunk_size in YAML (see rfq_service.yaml / statistics patterns).
 extract:
   chunk_size: 100000
   backend: pandas
@@ -25,6 +21,48 @@ snapshot:
   date_format: "%Y/%m/%d"
   delete_existing_full_load_snapshot: true
 
-# Runtime env (not YAML): RUN_LOAD_TYPE=full|delta|both — see docs/load-types.md
-# SKIP_DELTA_WHEN_FULL_FAILS=1 — when RUN_LOAD_TYPE=both, skip DELTA if FULL had failures
-# PIPELINE_CLEAR_WORKDIR_BEFORE_RUN=1 — wipes ALL pipeline state under DLT_PIPELINES_DIR (including delta cursors)
+# First delta extract uses cursor > initial_cursor_value (dlt incremental floor). Omit or set null to use
+# “no lower bound” (legacy). Override per table with ``initial_value`` in delta_load/*.yaml.
+# Env DELTA_INITIAL_CURSOR_VALUE overrides this; empty env disables.
+delta:
+  initial_cursor_value: "1970-01-01T00:00:00"
+
+# ── Single place for non-secret job tuning (env vars override these when set). ────────────────────
+# RUN_LOAD_TYPE / RUN_DATABASE / RUN_TABLE stay env-only (entrypoint filters).
+# Secrets (PG_*, bucket URL via DESTINATION__*, DB names POSTGRES_DB_*) stay in env / .env only.
+runtime:
+  log_level: INFO
+  # DLT_PIPELINES_DIR env overrides; default relative dir when unset:
+  dlt_pipelines_dir: ".dlt_work"
+  max_workers_full: 4
+  max_workers_delta: 4
+  full_load_database_serial: false
+  full_load_max_attempts: 1
+  full_load_retry_delay_seconds: 20
+  delta_load_max_attempts: 1
+  delta_load_retry_delay_seconds: 20
+  full_load_fail_fast: false
+  delta_load_fail_fast: false
+  skip_delete_existing_snapshot: false
+  phase_watchdog_interval_sec: 180
+  pipeline_clear_workdir_before_run: false
+  full_load_retry_clear_pipeline_workdir: false
+  exit_on_table_failures: false
+  sns_publish_delay_seconds: 0
+  sns_always_publish_failure_digest: false
+  # Mirrors SNS_PUBLISH_FAILURE_DIGEST_ON_BATCH_RETRY_ONLY_ONCE default on: skip duplicate SNS on Batch retry.
+  sns_skip_digest_on_batch_retry: true
+  # When true: JSON run summary → {bucket}/{dataset}/_batch_run_summaries/{snapshot_date}/{job_id}.json
+  run_summary_s3_upload: false
+  # Optional overrides for extract.* (else use extract.chunk_size / extract.backend below):
+  # extract_chunk_size: 150000
+  # extract_backend: pandas
+
+postgres:
+  statement_timeout_ms: null
+  tcp_keepalives_enabled: true
+  keepalives_idle: 30
+  keepalives_interval: 10
+  keepalives_count: 3
+  sqlalchemy_pool_size: 16
+  sqlalchemy_max_overflow: 16

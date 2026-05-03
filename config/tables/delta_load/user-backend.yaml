@@ -1,42 +1,69 @@
-# Prisma-style quoted columns — cursor_expression uses PostgreSQL double-quoted identifiers.
 tables:
   - schema: public
-    table: Profile
-    output_table_name: Profile
+    table: "Profile"
+    output_table_name: user_backend_profile
     enabled: true
-    columns:
-      - createTime
-      - updateTime
-      - createPlatform
-      - legacyWlwId
-      - legacyEpId
+    select_sql: |
+      "createTime" as createtime,
+      "updateTime" as updatetime,
+      COALESCE("createPlatform", '') as createplatform,
+      "legacyWlwId" as legacywlwid,
+      "legacyEpId" as legacyepid,
+      id::text as id,
+      COALESCE("countryCode", '') as countrycode,
+      email,
+      COALESCE("givenName", '') as givenname,
+      "isAdmin" as isadmin,
+      COALESCE("preferredLanguage", '') as preferredlanguage,
+      COALESCE(salutation, '') as salutation,
+      COALESCE(surname, '') as surname,
+      COALESCE(mobile::text, '') as mobile,
+      COALESCE(phone::text, '') as phone,
+      COALESCE(agreements::text, '[]') as agreements,
+      COALESCE("identityId", '') as identityid,
+      COALESCE(array_to_json(roles)::text, '[]') as roles,
+      COALESCE(organisation::text, '') as organisation,
+      COALESCE("alibabaId", '') as alibabaid
+    output_columns:
+      - createtime
+      - updatetime
+      - createplatform
+      - legacywlwid
+      - legacyepid
       - id
-      - countryCode
+      - countrycode
       - email
-      - givenName
-      - isAdmin
-      - preferredLanguage
+      - givenname
+      - isadmin
+      - preferredlanguage
       - salutation
       - surname
       - mobile
       - phone
       - agreements
-      - identityId
+      - identityid
       - roles
       - organisation
-      - alibabaId
+      - alibabaid
+      - dlt_cursor
     cursor_column: dlt_cursor
-    cursor_expression: GREATEST("createTime", "updateTime")
+    cursor_expression: GREATEST(createtime, updatetime)
 
   - schema: public
-    table: SupplierProfile
-    output_table_name: SupplierProfile
+    table: "SupplierProfile"
+    output_table_name: user_backend_supplierprofile
     enabled: true
-    columns:
-      - id
-      - createTime
-      - updateTime
-      - profileId
-      - supplierFactId
+    select_sql: |
+      id::text as id,
+      "createTime" as createtime,
+      "updateTime" as updatetime,
+      "profileId" as profileid,
+      "supplierFactId" as supplierfactid
+    output_columns:
+      - createtime
+      - updatetime
+      - profileid
+      - supplierfactid
+      - dlt_cursor
     cursor_column: dlt_cursor
-    cursor_expression: GREATEST("createTime", "updateTime")
+    cursor_expression: GREATEST(createtime, updatetime)

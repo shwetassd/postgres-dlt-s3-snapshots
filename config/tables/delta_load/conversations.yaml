@@ -37,12 +37,21 @@ tables:
     cursor_column: dlt_cursor
     cursor_expression: GREATEST(created_at, modified_at)
 
-
   - schema: public
     table: message
-    output_table_name: message
+    output_table_name: conversations_message
     enabled: true
-    columns:
+    select_sql: |
+      id::text AS id,
+      conversation_id::text AS conversation_id,
+      message_type,
+      contents,
+      created_by::text AS created_by,
+      created_at,
+      updated_at,
+      status,
+      sent_from
+    output_columns:
       - id
       - conversation_id
       - message_type
@@ -52,5 +61,40 @@ tables:
       - updated_at
       - status
       - sent_from
+      - dlt_cursor
     cursor_column: dlt_cursor
     cursor_expression: GREATEST(created_at, updated_at)
+
+  - schema: public
+    table: platform_user
+    output_table_name: platform_user
+    enabled: true
+    select_sql: |
+      user_id,
+      external_id,
+      email,
+      country,
+      full_name,
+      source_platform,
+      address,
+      is_anonymized,
+      created_at,
+      modified_at,
+      platform,
+      user_profile_id::text AS user_profile_id
+    output_columns:
+      - user_id
+      - external_id
+      - email
+      - country
+      - full_name
+      - source_platform
+      - address
+      - is_anonymized
+      - created_at
+      - modified_at
+      - platform
+      - user_profile_id
+      - dlt_cursor
+    cursor_column: dlt_cursor
+    cursor_expression: GREATEST(created_at, modified_at)
